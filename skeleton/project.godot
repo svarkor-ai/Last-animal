@@ -1,0 +1,22 @@
+; Engine configuration file (Godot 4.7.2-stable pinned, see ../engine/PIN.txt).
+; Last Animal - M00 preflight skeleton (MC 839.1, gunilla, 2026-08-30).
+; REPAIRED + C# wired in MC 839.2 (gunilla, 2026-08-31): the 839.1 copy of this file
+; was written truncated and its last line ended with the literal text "[truncated]",
+; so the file did not parse. Full content restored below; do not re-truncate.
+; Intentionally minimal: M01 (coder) adds the real composition root.
+
+config_version=5
+
+[application]
+
+config/name="Last Animal (M00 preflight)"
+run/main_scene="res://preflight.tscn"
+config/features=PackedStringArray("4.7", "Forward Plus")
+
+[dotnet]
+
+project/assembly_name="LastAnimalPreflight"
+
+[rendering]
+
+renderer/rendering_method="forward_plus"

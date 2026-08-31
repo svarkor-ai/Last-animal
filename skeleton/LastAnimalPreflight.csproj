@@ -1,0 +1,23 @@
+<Project Sdk="Godot.NET.Sdk/4.7.2">
+  <!-- EXACT version pin (no 4.7.*, no 'latest'): this SDK must stay equal to the
+       engine build in ../engine/PIN.txt (4.7.2-stable). NuGet resolves this
+       from the offline feed in NuGet.Config, so the SDK version cannot drift
+       past what the pinned editor ships. Bump both together, never one alone. -->
+
+  <PropertyGroup>
+    <!-- Assembly name must match [dotnet] project/assembly_name in project.godot. -->
+    <AssemblyName>LastAnimalPreflight</AssemblyName>
+    <RootNamespace>LastAnimal</RootNamespace>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>12</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
+    <!-- Godot.CSharp / Godot.SourceGenerators come from the pinned engine's own
+         GodotSharp API + GodotSharp.Tools/nupkgs (see engine/PIN.txt). The SDK
+         version below is the engine pin: bump them together or not at all.
+         Offline note: the SDK resolves from the local nupkgs feed configured in
+         NuGet.config (839.2), not from api.nuget.org. -->
+  </PropertyGroup>
+
+</Project>
