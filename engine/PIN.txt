@@ -1,0 +1,21 @@
+Godot engine pin — Last Animal (project)
+Pinned: 4.7.2-stable (stable channel latest on 2026-08-30, GitHub API)
+Commit: ed1daf0bf (from `godot --version`)
+
+Binaries (on vm105, this seat only — no root available):
+  /srv/workspace/svarkor-last-animal-phase2/gunilla/engine/Godot_v4.7.2-stable_linux.x86_64
+  /srv/workspace/svarkor-last-animal-phase2/gunilla/engine/Godot_v4.7.2-stable_mono_linux_x86_64/Godot_v4.7.2-stable_mono_linux.x86_64
+Export templates (user dir):
+  ~/.local/share/godot/export_templates/4.7.2.stable/  (version.txt: 4.7.2.stable.mono)
+Integrity: SHA512 of every zip verified against the official
+SHA512-SUMS.txt from the 4.7.2-stable GitHub release (engine/SHA512-SUMS.txt).
+
+Toolchain: dotnet 8.0.130 (/usr/bin/dotnet), Xvfb + graphical-test-helper.sh present.
+
+RULES for all modules:
+- Pin the engine version in CI images; never let the build pick a floating version.
+- Do NOT upgrade the engine version except deliberately, via a card that re-runs
+  ci/smoke.sh + ci/export_check.sh (export templates are version-locked: a version
+  bump needs a new .tpz installed to .../export_templates/<new-version>/ first).
+- C# builds need the mono editor binary; it runs GDScript too (verified).
+- Windows target templates: windows_release_x86_64(.exe + _console.exe) present.
