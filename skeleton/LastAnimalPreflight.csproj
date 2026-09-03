@@ -13,11 +13,30 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>disable</ImplicitUsings>
     <EnableDefaultCompileItems>true</EnableDefaultCompileItems>
-    <!-- Godot.CSharp / Godot.SourceGenerators come from the pinned engine's own
-         GodotSharp API + GodotSharp.Tools/nupkgs (see engine/PIN.txt). The SDK
-         version below is the engine pin: bump them together or not at all.
-         Offline note: the SDK resolves from the local nupkgs feed configured in
-         NuGet.config (839.2), not from api.nuget.org. -->
+    <!-- Exclude the xunit test files: they are compiled by the standalone
+         test project (tests/LastAnimalDnaNpcTests.csproj), not by the
+         Godot project. The Godot project compiles the src/ files + the
+         Godot-specific test scripts (BootTest.cs). -->
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Compile the M02/M03 source files (pure logic, no Godot dependency). -->
+    <Compile Include="src/dna/DnaLanguage.cs" />
+    <Compile Include="src/dna/DnaMessage.cs" />
+    <Compile Include="src/dna/LanguageSignature.cs" />
+    <Compile Include="src/dna/EcosystemAdaptation.cs" />
+    <Compile Include="src/npc/SalarySystem.cs" />
+    <Compile Include="src/npc/BetrayalSystem.cs" />
+    <Compile Include="src/npc/CompanionComponent.cs" />
+    <Compile Include="src/npc/EmotionalDepth.cs" />
+    <!-- Compile the Godot-specific files (autoload + test scripts). -->
+    <Compile Include="autoload/EventBus.cs" />
+    <Compile Include="autoload/FrameworkTypes.cs" />
+    <Compile Include="autoload/IGameModule.cs" />
+    <Compile Include="autoload/GameBootstrap.cs" />
+    <Compile Include="PreflightScript.cs" />
+    <Compile Include="tests/BootTest.cs" />
+  </ItemGroup>
 
 </Project>

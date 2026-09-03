@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Last Animal — M02+M03 pure-logic test project (MC 890.2, dobbie, 2026-09-03).
+       This is a STANDALONE test project: it references the M02/M03 source files
+       directly (via Compile Include) so `dotnet test` runs the pure-logic
+       suites headless without pulling in the Godot SDK. The Godot project
+       (LastAnimalPreflight.csproj) compiles the same source files for the
+       engine; this project is the test-only entry point. -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>12</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <!-- Assembly name must not collide with the Godot project's assembly. -->
+    <AssemblyName>LastAnimalDnaNpcTests</AssemblyName>
+    <RootNamespace>LastAnimal.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.5.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Compile the M02/M03 source files directly into this test assembly.
+         These are the same files the Godot project compiles; keeping them
+         in one place (src/) means the test project and the Godot project
+         always test the same code. -->
+    <Compile Include="../src/dna/DnaLanguage.cs" />
+    <Compile Include="../src/dna/DnaMessage.cs" />
+    <Compile Include="../src/dna/LanguageSignature.cs" />
+    <Compile Include="../src/dna/EcosystemAdaptation.cs" />
+    <Compile Include="../src/npc/SalarySystem.cs" />
+    <Compile Include="../src/npc/BetrayalSystem.cs" />
+    <Compile Include="../src/npc/CompanionComponent.cs" />
+    <Compile Include="../src/npc/EmotionalDepth.cs" />
+    <!-- Exclude BootTest.cs: it is a Godot SceneTree script (M01) that
+         requires the Godot SDK and is not part of the pure-logic test
+         suite. It is compiled by the Godot project (LastAnimalPreflight.csproj). -->
+    <Compile Remove="BootTest.cs" />
+  </ItemGroup>
+
+</Project>
