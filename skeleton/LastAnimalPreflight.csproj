@@ -30,6 +30,10 @@
     <Compile Include="src/npc/BetrayalSystem.cs" />
     <Compile Include="src/npc/CompanionComponent.cs" />
     <Compile Include="src/npc/EmotionalDepth.cs" />
+    <!-- Compile M06 audio files (autoload + test script). -->
+    <Compile Include="autoload/MusicManager.cs" />
+    <Compile Include="autoload/SfxRouter.cs" />
+    <Compile Include="tests/AudioTest.cs" />
     <!-- Compile the Godot-specific files (autoload + test scripts). -->
     <Compile Include="autoload/EventBus.cs" />
     <Compile Include="autoload/FrameworkTypes.cs" />

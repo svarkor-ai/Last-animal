@@ -1,0 +1,27 @@
+M06 audio assets — licence & attribution (CC0, self-authored)
+=============================================================
+Project: Last Animal · MC 890.7 · artemis · 2026-09-03
+
+Every audio file in this directory was ORIGINALLY authored for this project by
+artemis (agent-town) on 2026-09-03, using python3's `wave` module (PCM WAV SFX)
+and ffmpeg (Ogg Vorbis music). They are released under CC0 1.0 Universal
+(https://creativecommons.org/publicdomain/zero/1.0/).
+
+Because they are self-authored, there is no third-party attribution obligation.
+They are placed here untouched so Svarkor (or the owner) can verify the audio data
+matches what MusicManager/SfxRouter expect. No third-party asset, licence tag, or
+attribution is claimed — there is no conditioned content in these files.
+
+Files
+-----
+  dna_extract.wav   rising sweep (200->900 Hz, 0.25 s) — EventBus DnaExtracted
+  dna_spoken.wav    gentle chime (400->700 Hz, 0.30 s) — EventBus DnaSpoken
+  loyalty.wav       bright chime (500->800 Hz, 0.35 s) — EventBus LoyaltyChanged
+  betrayal.wav      falling tone (300->150 Hz, 0.45 s) -- EventBus Betrayal
+  ecosystem.wav     rising (350->950 Hz, 0.30 s)       — EventBus EcosystemAdapted
+  music_theme.ogg   CC0 pad loop, 261.63 Hz + echo + fades (8.1 s, Ogg Vorbis)
+
+These are GENERATIVE proof assets (real PCM, non-silent, variation-ready), chosen to
+be simple and licence-clean. In production Svarkor/the owner may replace them with
+richer Kenney/PolyHaven CC0 packs if desired, keeping the same file names so the
+module wiring is unchanged.
