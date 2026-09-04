@@ -1,0 +1,21 @@
+[gd_scene load_steps=3 format=3]
+
+[sub_resource type="StandardMaterial3D" id="Mat_1"]
+albedo_color = Color(1, 0, 0, 1)
+shading_mode = 1
+emission_enabled = true
+emission = Color(1, 0, 0, 1)
+
+[sub_resource type="SphereMesh" id="Sph_1"]
+radius = 3.0
+height = 6.0
+
+[node name="Red" type="Node3D"]
+
+[node name="Sphere" type="MeshInstance3D" parent="."]
+mesh = SubResource("Sph_1")
+surface_material_override/0 = SubResource("Mat_1")
+
+[node name="Camera3D" type="Camera3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 10)
+current = true
