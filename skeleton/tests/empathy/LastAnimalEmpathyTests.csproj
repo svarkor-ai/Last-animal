@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Last Animal — M04 empathy-book pure-logic test project (MC 890.11, dobbie, 2026-09-06).
+       Phase-8 DoD (PHASE0.md Phase 8): unit tests for EmpathyBook.Query + RouteResolution
+       PASS (exit 0) incl. the Forgive-vs-PermanentBreak branch and a deliberately-failing
+       case. This is a STANDALONE test project: it compiles only the M04 source + its M03
+       dependencies + the M04 tests, so the M04 suite is independent (Phase 5 rule: never
+       merge two suites into one test card). EnableDefaultCompileItems=false keeps it from
+       glob-collecting unrelated Godot test scripts (AudioTest.cs etc). -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>12</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <AssemblyName>LastAnimalEmpathyTests</AssemblyName>
+    <RootNamespace>LastAnimal.Tests.Empathy</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.5.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- M04 pure-logic source + its M03 C8 dependency (reused, not re-built). -->
+    <Compile Include="../../src/empathy/EmpathyBook.cs" />
+    <Compile Include="../../src/npc/CompanionComponent.cs" />
+    <Compile Include="../../src/npc/EmotionalDepth.cs" />
+    <!-- M04 tests + the deliberately-broken harness self-test. A WILDCARD (not
+         explicit files) so MSBuild re-evaluates the file set on every build:
+         the gate toggles the harness self-test by renaming it, and a wildcard —
+         like the default-compile glob in the DNA project — reflects the current
+         file list each run. -->
+    <Compile Include="*.cs" />
+  </ItemGroup>
+</Project>

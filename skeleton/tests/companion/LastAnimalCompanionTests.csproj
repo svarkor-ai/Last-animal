@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Last Animal — M05 companion-system pure-logic test project (MC 890.12, bernie, 2026-09-06).
+       Mirrors the M04 pattern (tests/empathy/LastAnimalEmpathyTests.csproj): a STANDALONE
+       test project that compiles the M05 companion sources (plus the M03 npc sources it is
+       driven by) directly, so `dotnet test` runs the M05 suite headless without pulling in
+       the Godot SDK. The Godot project (LastAnimalPreflight.csproj) compiles the same
+       src/ files for the engine; this project is the M05 test-only entry point. -->
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>12</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <!-- Assembly name must not collide with the Godot project's assembly. -->
+    <AssemblyName>LastAnimalCompanionTests</AssemblyName>
+    <RootNamespace>LastAnimal.Tests</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.5.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- M05 companion sources (this module). -->
+    <Compile Include="../../src/companion/CompanionStateMachine.cs" />
+    <Compile Include="../../src/companion/CompanionNeeds.cs" />
+    <Compile Include="../../src/companion/CompanionAnimationHook.cs" />
+    <!-- M03 npc sources this module is driven by (SalarySystem/BetrayalSystem/
+         CompanionComponent) — the Phase-9 gate says loyalty math lives here. -->
+    <Compile Include="../../src/npc/SalarySystem.cs" />
+    <Compile Include="../../src/npc/BetrayalSystem.cs" />
+    <Compile Include="../../src/npc/CompanionComponent.cs" />
+    <!-- M05 unit tests are auto-globbed from this project dir by the SDK;
+         the src/ files above need explicit includes since they live elsewhere
+         and the src/ tree is the Godot project's. Mirror tests/empathy/ layout. -->
+    <!-- EXCLUDE the Godot SceneTree render test from the standalone dotnet
+         suite: CompanionRenderTest.cs needs the Godot SDK and is executed by
+         graphical-test-helper on the engine side, not under dotnet test.
+         It would otherwise be auto-globbed and break this project's compile. -->
+    <Compile Remove="CompanionRenderTest.cs" />
+  </ItemGroup>
+
+</Project>

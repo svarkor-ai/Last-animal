@@ -30,6 +30,24 @@
     <Compile Include="src/npc/BetrayalSystem.cs" />
     <Compile Include="src/npc/CompanionComponent.cs" />
     <Compile Include="src/npc/EmotionalDepth.cs" />
+    <!-- Compile M05 companion-system sources (pure logic + Godot entity seam). -->
+    <Compile Include="src/companion/CompanionStateMachine.cs" />
+    <Compile Include="src/companion/CompanionNeeds.cs" />
+    <Compile Include="src/companion/CompanionAnimationHook.cs" />
+    <Compile Include="src/companion/CompanionEntity.cs" />
+    <!-- Compile M04 empathy-book pure-logic source. -->
+    <Compile Include="src/empathy/EmpathyBook.cs" />
+    <!-- Compile M10 ui-hud source (C13: Hud, DialogueSystem, EmpathyPanel). -->
+    <Compile Include="src/ui/Hud.cs" />
+    <Compile Include="src/ui/DialogueSystem.cs" />
+    <Compile Include="src/ui/EmpathyPanel.cs" />
+    <!-- Compile M08 combat-3d source files (C10 + C11, pure logic). -->
+    <Compile Include="src/combat/CombatVec3.cs" />
+    <Compile Include="src/combat/EnemyAI.cs" />
+    <Compile Include="src/combat/CombatSystem.cs" />
+    <Compile Include="src/combat/PlayerController.cs" />
+    <!-- Compile M12 boss-ecosystem-adaptation (C15, pure logic). -->
+    <Compile Include="src/ecosystem/EcosystemSpawner.cs" />
     <!-- Compile M06 audio files (autoload + test script). -->
     <Compile Include="autoload/MusicManager.cs" />
     <Compile Include="autoload/SfxRouter.cs" />
@@ -41,6 +59,11 @@
     <Compile Include="autoload/GameBootstrap.cs" />
     <Compile Include="PreflightScript.cs" />
     <Compile Include="tests/BootTest.cs" />
+    <Compile Include="tests/EmpathySignalTest.cs" />
+    <Compile Include="tests/companion/CompanionRenderTest.cs" />
+    <Compile Include="tests/ui/UiRenderTest.cs" />
+    <Compile Include="tests/ui/UiHarnessSelfTest.cs" />
+    <Compile Include="_scratch/LibDiag.cs" />
   </ItemGroup>
 
 </Project>

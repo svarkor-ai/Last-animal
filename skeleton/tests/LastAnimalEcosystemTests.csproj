@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Last Animal — M12 boss-ecosystem-adaptation pure-logic test project
+       (MC 890.16, artemis, 2026-09-06). STANDALONE: compiles the M12 source
+       files directly so `dotnet test` runs the C15 suite headless without
+       pulling in the Godot SDK. The Godot project
+       (LastAnimalPreflight.csproj) compiles the same source files for the
+       engine; this project is the test-only entry point. -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>12</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <!-- Assembly name must not collide with the Godot project's assembly. -->
+    <AssemblyName>LastAnimalEcosystemTests</AssemblyName>
+    <RootNamespace>LastAnimal.Tests</RootNamespace>
+    <!-- Compile ONLY the explicitly listed files below. Do not glob the
+         tests/ dir for .cs — other milestone tests (AudioTest.cs, BootTest.cs,
+         CompanionRenderTest.cs, etc.) require GodotSharp and cannot build in
+         this standalone project. The explicit list is the source of truth. -->
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.5.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- M12 ecosystem source (this card). -->
+    <Compile Include="../src/ecosystem/EcosystemSpawner.cs" />
+    <!-- M02 DNA sources the spawner's CounterProfile adaptation reads. -->
+    <Compile Include="../src/dna/DnaLanguage.cs" />
+    <Compile Include="../src/dna/DnaMessage.cs" />
+    <Compile Include="../src/dna/LanguageSignature.cs" />
+    <Compile Include="../src/dna/EcosystemAdaptation.cs" />
+    <!-- M08 combat sources the spawner emits EnemyAI.Type + CombatVec3,
+         plus the CombatSystem + PlayerController the keystone sim needs. -->
+    <Compile Include="../src/combat/CombatVec3.cs" />
+    <Compile Include="../src/combat/EnemyAI.cs" />
+    <Compile Include="../src/combat/CombatSystem.cs" />
+    <Compile Include="../src/combat/PlayerController.cs" />
+    <!-- The test files (listed explicitly; EnableDefaultCompileItems=false).
+         The harness self-test is compiled conditionally so the gate drops it
+         with /p:IncludeHarness=false for the green run (two-sided
+         calibration, same pattern as combat_test.sh). -->
+    <Compile Include="EcosystemSpawnerTests.cs" />
+    <Compile Include="EcosystemHarnessSelfTest.cs" Condition=" '$(IncludeHarness)' != 'false' " />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,45 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- Last Animal — M11 save-progression test project (MC 890.15, gunilla, 2026-09-06).
+       Standalone xunit project: compiles the engine-free save sources directly
+       (via Compile Include) so `dotnet test` runs the C14 Save/Load suite
+       headless without the Godot SDK. The Godot project
+       (LastAnimalPreflight.csproj) compiles the same GameState/SaveSystem plus
+       the GodotSaveStore user:// seam for the engine; this project is the
+       test-only entry point. -->
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <LangVersion>12</LangVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <IsPackable>false</IsPackable>
+    <!-- Assembly name must not collide with the Godot project's assembly. -->
+    <AssemblyName>LastAnimalSaveTests</AssemblyName>
+    <RootNamespace>LastAnimal.Tests</RootNamespace>
+    <!-- Compile ONLY the explicitly listed files below. Do not glob tests/ —
+         other milestone tests require GodotSharp and cannot build here.
+         The explicit <Compile Include> list is the source of truth. -->
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
+    <PackageReference Include="xunit" Version="2.5.3" />
+    <PackageReference Include="xunit.runner.visualstudio" Version="2.5.3" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- M11 save source files (engine-free I3). GodotSaveStore.cs is
+         deliberately NOT included — it needs GodotSharp and belongs to the
+         engine project only. -->
+    <Compile Include="../../src/save/GameState.cs" />
+    <Compile Include="../../src/save/SaveSystem.cs" />
+    <!-- The test files themselves (EnableDefaultCompileItems=false, so they
+         must be listed). The harness self-test is compiled conditionally so
+         the gate script can drop it with /p:IncludeHarness=false (two-sided
+         calibration, same pattern as ci/combat_test.sh). -->
+    <Compile Include="SaveSystemTests.cs" />
+    <Compile Include="SaveHarnessSelfTest.cs" Condition=" '$(IncludeHarness)' != 'false' " />
+  </ItemGroup>
+
+</Project>

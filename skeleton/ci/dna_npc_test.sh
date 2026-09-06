@@ -52,11 +52,14 @@ echo "DNA_NPC_TEST: run 1 — Failed=$FAILED1 Passed=$PASSED1 Total=$TOTAL1"
 
 # (2) Run WITHOUT the harness self-test.
 #     Expected: 0 failures, all tests green.
+#     The self-test file stays in place; the csproj drops it from the build
+#     via /p:IncludeHarness=false (the csproj compiles it conditionally).
+#     Same two-sided pattern as ci/combat_test.sh and ci/ecosystem_test.sh
+#     (MC 890.17: converted from file-move to the conditional-property form
+#     so no gate has to mutate shared test files mid-run).
 echo "DNA_NPC_TEST: run 2 — without harness self-test (expect 0 failures)"
-mv "$SELFTEST" "$SELFTEST.bak"
-LOG2="$(cd "$PROJ" && dotnet test "$TESTS_DIR/LastAnimalDnaNpcTests.csproj" --no-restore 2>&1)"
+LOG2="$(cd "$PROJ" && dotnet test "$TESTS_DIR/LastAnimalDnaNpcTests.csproj" --no-restore -p:IncludeHarness=false 2>&1)"
 CODE2=$?
-mv "$SELFTEST.bak" "$SELFTEST"
 printf '%s\n' "$LOG2"
 
 # The suite must pass (exit 0) with 0 failures.

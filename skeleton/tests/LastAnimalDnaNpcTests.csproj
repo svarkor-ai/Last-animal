@@ -15,6 +15,14 @@
     <!-- Assembly name must not collide with the Godot project's assembly. -->
     <AssemblyName>LastAnimalDnaNpcTests</AssemblyName>
     <RootNamespace>LastAnimal.Tests</RootNamespace>
+    <!-- THE CROSS-MODULE GLOB FIX (MC 890.17, artemis, 2026-09-06).
+         This project is a STANDALONE pure-logic suite. It must NOT glob the
+         whole tests/ dir for .cs — that pulled in every other milestone's
+         tests (Combat3DTests.cs, EcosystemSpawnerTests.cs, the companion/,
+         save/, ui/ sub-folder render/Godot-bound suites) and broke the M02+M03
+         DNA gate with CS0234/CS0246 (regression 2026-09-06). Compile ONLY the
+         explicitly listed test files below; the list is the source of truth. -->
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
 
   <ItemGroup>
@@ -36,10 +44,20 @@
     <Compile Include="../src/npc/BetrayalSystem.cs" />
     <Compile Include="../src/npc/CompanionComponent.cs" />
     <Compile Include="../src/npc/EmotionalDepth.cs" />
-    <!-- Exclude BootTest.cs: it is a Godot SceneTree script (M01) that
-         requires the Godot SDK and is not part of the pure-logic test
-         suite. It is compiled by the Godot project (LastAnimalPreflight.csproj). -->
-    <Compile Remove="BootTest.cs" />
+    <Compile Include="../src/companion/CompanionStateMachine.cs" />
+    <Compile Include="../src/companion/CompanionNeeds.cs" />
+    <Compile Include="../src/companion/CompanionAnimationHook.cs" />
+    <Compile Include="../src/empathy/EmpathyBook.cs" />
+    <!-- This suite's OWN test files (EnableDefaultCompileItems=false above, so
+         they must be listed explicitly). Exactly the M02+M03 pure-logic suite:
+         DnaLanguageTests + NpcEmotionTests + the HarnessSelfTest calibration.
+         The harness self-test is compiled conditionally so the gate script can
+         drop it out with /p:IncludeHarness=false for the "real suite green"
+         run (two-sided calibration, same pattern as ci/combat_test.sh and
+         ci/ecosystem_test.sh). -->
+    <Compile Include="DnaLanguageTests.cs" />
+    <Compile Include="NpcEmotionTests.cs" />
+    <Compile Include="HarnessSelfTest.cs" Condition=" '$(IncludeHarness)' != 'false' " />
   </ItemGroup>
 
 </Project>

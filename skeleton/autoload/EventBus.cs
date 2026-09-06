@@ -47,6 +47,12 @@ public partial class EventBus : Node
     [Signal] public delegate void BetrayalEventHandler(string companion, string target);
     [Signal] public delegate void EcosystemAdaptedEventHandler(string mutation);
 
+    // --- M04 (C2): EmpathyBookOpened() — added with M04/M10 (per PHASE0 C2 note;
+    //     "EmpathyBookOpened() arrives with M04/M10 (not in the M01 C2 set)"). ----
+    // The book opening is a no-payload signal; the entries it will show come from
+    // the C9 pure-logic side (EmpathyBook.Query) fed by the M10 EmpathyPanel.
+    [Signal] public delegate void EmpathyBookOpenedEventHandler();
+
     // --- C2: publish surface (thin, no logic) --------------------------------
 
     public void EmitDnaExtracted(DnaSignature signature)
@@ -63,4 +69,8 @@ public partial class EventBus : Node
 
     public void EmitEcosystemAdapted(MutationId mutation)
         => EmitSignal(SignalName.EcosystemAdapted, mutation.Id);
+
+    // --- M04: EmpathyBookOpened() emit (C2) --------------------------------
+    public void EmitEmpathyBookOpened()
+        => EmitSignal(SignalName.EmpathyBookOpened);
 }
