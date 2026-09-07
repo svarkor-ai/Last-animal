@@ -63,7 +63,6 @@
     <Compile Include="tests/companion/CompanionRenderTest.cs" />
     <Compile Include="tests/ui/UiRenderTest.cs" />
     <Compile Include="tests/ui/UiHarnessSelfTest.cs" />
-    <Compile Include="_scratch/LibDiag.cs" />
   </ItemGroup>
 
 </Project>
