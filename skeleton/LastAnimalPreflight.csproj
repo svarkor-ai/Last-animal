@@ -51,6 +51,7 @@
     <!-- Compile M06 audio files (autoload + test script). -->
     <Compile Include="autoload/MusicManager.cs" />
     <Compile Include="autoload/SfxRouter.cs" />
+    <Compile Include="autoload/GameLoop.cs" />
     <Compile Include="tests/AudioTest.cs" />
     <!-- Compile the Godot-specific files (autoload + test scripts). -->
     <Compile Include="autoload/EventBus.cs" />

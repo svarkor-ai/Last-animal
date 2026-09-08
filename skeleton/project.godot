@@ -29,6 +29,7 @@ MusicManager="*res://autoload/MusicManager.cs"
 EventBus="*res://autoload/EventBus.cs"
 GameBootstrap="*res://autoload/GameBootstrap.cs"
 SfxRouter="*res://autoload/SfxRouter.cs"
+GameLoop="*res://autoload/GameLoop.cs"
 
 [input]
 
