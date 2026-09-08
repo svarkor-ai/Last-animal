@@ -1,0 +1,40 @@
+[gd_scene load_steps=6 format=3]
+
+[ext_resource type="Script" path="res://Player.cs" id="1_player"]
+[ext_resource type="PackedScene" path="res://zones/meadow/meadow.tscn" id="2_meadow"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_player"]
+radius = 0.4
+height = 1.8
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_player"]
+radius = 0.4
+height = 1.8
+
+[sub_resource type="StandardMaterial3D" id="StdMat_player"]
+albedo_color = Color(0.2, 0.6, 0.9, 1)
+
+[node name="Main" type="Node3D"]
+
+[node name="World" type="Node3D" parent="."]
+
+[node name="Meadow" parent="World" instance=ExtResource("2_meadow")]
+
+[node name="Player" type="CharacterBody3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 3, 0)
+script = ExtResource("1_player")
+CameraRig = NodePath("../Player/CameraRig")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="Player"]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 0)
+shape = SubResource("CapsuleShape3D_player")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="Player"]
+mesh = SubResource("CapsuleMesh_player")
+surface_material_override/0 = SubResource("StdMat_player")
+
+[node name="CameraRig" type="Node3D" parent="Player"]
+
+[node name="Camera3D" type="Camera3D" parent="Player/CameraRig"]
+transform = Transform3D(0.866, -0.5, 0, 0, 0, 1, 0.5, 0.866, 0, 0, 6, 6)
+current = true

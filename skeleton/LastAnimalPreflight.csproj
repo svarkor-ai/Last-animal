@@ -59,6 +59,8 @@
     <Compile Include="autoload/IGameModule.cs" />
     <Compile Include="autoload/GameBootstrap.cs" />
     <Compile Include="PreflightScript.cs" />
+    <Compile Include="Player.cs" />
+    <Compile Include="ci_proofs/MainCompositionProof.cs" />
     <Compile Include="tests/BootTest.cs" />
     <Compile Include="tests/EmpathySignalTest.cs" />
     <Compile Include="tests/companion/CompanionRenderTest.cs" />
