@@ -82,7 +82,8 @@ LOG3="$(timeout 180 "$GODOT" --headless --path "$PROJ" --script res://tests/Empa
 CODE3=$?
 printf '%s\n' "$LOG3"
 [ "$CODE3" -eq 0 ] || fail "EmpathySignalTest exited $CODE3 (non-zero)"
-printf '%s\n' "$LOG3" | grep -q 'M04_EMPATHY_SIGNAL_TEST: PASS' \
+# bash-native substring check (no pipe => no SIGPIPE race under pipefail)
+[[ "$LOG3" == *'M04_EMPATHY_SIGNAL_TEST: PASS'* ]] \
   || fail "expected 'M04_EMPATHY_SIGNAL_TEST: PASS' marker in output (a check went red)"
 
 echo "M04_EMPATHY_BOOK: GATE PASS — Query+RouteResolution suite green ($PASSED2 passed, 0 failed), harness self-test red, EmpathyBookOpened() fired (C2)"

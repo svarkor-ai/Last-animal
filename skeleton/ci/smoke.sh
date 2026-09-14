@@ -21,6 +21,15 @@ fail() { echo "SMOKE: FAIL: $*" >&2; exit 1; }
 [ -f "$PROJ/project.godot" ] || fail "not a godot project: $PROJ"
 command -v graphical-test-helper.sh >/dev/null || fail "graphical-test-helper.sh not on PATH"
 
+# (a-1) clean-clone import: a fresh clone has an empty/missing .godot/imported/,
+# so the first gate run spams import errors and the navmesh bakes 0 polygons.
+# Import once when needed (idempotent; cheap no-op when already imported).
+if [ ! -d "$PROJ/.godot/imported" ] || [ -z "$(ls -A "$PROJ/.godot/imported" 2>/dev/null)" ]; then
+  echo "SMOKE: .godot/imported empty — running one-time --import"
+  timeout 600 "$GODOT" --headless --path "$PROJ" --import \
+    || fail "engine --import exited nonzero"
+fi
+
 echo "SMOKE: godot=$($GODOT --version 2>/dev/null | tail -1)  project=$PROJ"
 
 # (a0) build the C# assembly through the ENGINE, not a bare `dotnet build`.
@@ -37,12 +46,19 @@ timeout 300 "$GODOT" --headless --path "$PROJ" --build-solutions --quit-after 2 
 # (a) headless load+quit — the process must exit 0, and NO C# load error is tolerated
 LOAD_LOG="$(timeout 120 "$GODOT" --headless --path "$PROJ" --quit-after 3 2>&1)" \
   || fail "headless quit exited nonzero"
-if printf '%s' "$LOAD_LOG" | grep -qi 'could not be found\|Cannot instantiate C#'; then
+# bash-native case-insensitive substring check (no pipe => no SIGPIPE race under
+# pipefail: grep -q exits on first match and SIGPIPEs the writer, which pipefail
+# turns into a spurious pipeline failure on large logs).
+LOAD_LOG_LC="${LOAD_LOG,,}"
+if [[ "$LOAD_LOG_LC" == *'could not be found'* || "$LOAD_LOG_LC" == *'cannot instantiate c#'* ]]; then
   fail "C# script did NOT load (assembly missing or class name mismatch):
 $LOAD_LOG"
 fi
-printf '%s\n' "$LOAD_LOG" | grep -q 'C# scene alive' \
-  || fail "C# _Ready() did not run (expected 'C# scene alive' in output)"
+# Since w3 (MC 1123.9) run/main_scene points at res://main.tscn, the preflight
+# scene never loads and its 'C# scene alive' marker can never print; the boot
+# marker is now the composition root's GameLoop line.
+[[ "$LOAD_LOG" == *'GameLoop: ready'* ]] \
+  || fail "composition root did not boot (expected 'GameLoop: ready' in output)"
 
 # (b) render-and-verify under throwaway Xvfb — non-blank framebuffer required
 OUT="$(mktemp -u /tmp/smoke_XXXXXX.png)"

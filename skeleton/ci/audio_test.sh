@@ -40,7 +40,8 @@ printf '%s\n' "$LOG"
 
 # (3) The gate: exit code 0 AND the PASS marker present. Either missing => fail.
 [ "$CODE" -eq 0 ] || fail "AudioTest exited $CODE (non-zero)"
-printf '%s\n' "$LOG" | grep -q 'M06_AUDIO_TEST: PASS' \
+# bash-native substring check (no pipe => no SIGPIPE race under pipefail)
+[[ "$LOG" == *'M06_AUDIO_TEST: PASS'* ]] \
   || fail "expected 'M06_AUDIO_TEST: PASS' marker in output (a check went red)"
 
 echo "M06_AUDIO_TEST: GATE PASS — EventBus-triggered non-silent SFX on the Sfx bus, music on Music bus"

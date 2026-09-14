@@ -27,6 +27,15 @@ fail() { echo "MAIN_COMPOSITION_TEST: GATE FAIL: $*" >&2; exit 1; }
 [ -x "$GODOT" ] || fail "GODOT not executable: $GODOT"
 [ -f "$GUI_HELPER" ] || fail "graphical-test-helper not found: $GUI_HELPER"
 
+# (A-1) clean-clone import: a fresh clone has an empty/missing .godot/imported/,
+# so the first gate run spams import errors and the navmesh bakes 0 polygons.
+# Import once when needed (idempotent; cheap no-op when already imported).
+if [ ! -d "$PROJ/.godot/imported" ] || [ -z "$(ls -A "$PROJ/.godot/imported" 2>/dev/null)" ]; then
+  echo "MAIN_COMPOSITION_TEST: .godot/imported empty — running one-time --import"
+  timeout 600 "$GODOT" --headless --path "$PROJ" --import \
+    || fail "engine --import exited nonzero"
+fi
+
 echo "MAIN_COMPOSITION_TEST: project=$PROJ  godot=$("$GODOT" --version 2>/dev/null | tail -1)"
 
 # build through the pinned engine so the C# assembly (Player.cs + proof) is current
@@ -38,13 +47,16 @@ LOGA="$(timeout 120 "$GODOT" --headless --path "$PROJ" --script "$PROOF" 2>&1)"
 CODEA=$?
 printf '%s\n' "$LOGA"
 [ "$CODEA" -eq 0 ] || fail "headless proof exited $CODEA (non-zero)"
-printf '%s\n' "$LOGA" | grep -q "$PASS_MARKER" \
+# bash-native substring checks (no pipe => no SIGPIPE race under pipefail:
+# grep -q exits on first match and SIGPIPEs the writer, which pipefail turns
+# into a spurious pipeline failure on large logs).
+[[ "$LOGA" == *"$PASS_MARKER"* ]] \
   || fail "expected '$PASS_MARKER' marker (a composition-root check went red)"
-printf '%s\n' "$LOGA" | grep -q "RG2 OK" \
+[[ "$LOGA" == *'RG2 OK'* ]] \
   || fail "expected 'RG2 OK' (run/main_scene must point at main.tscn)"
-printf '%s\n' "$LOGA" | grep -q "PLAYER_MOVED" \
+[[ "$LOGA" == *'PLAYER_MOVED'* ]] \
   || fail "expected 'PLAYER_MOVED' (input -> PlayerController -> body)"
-printf '%s\n' "$LOGA" | grep -q "CAMERA_FOLLOWS" \
+[[ "$LOGA" == *'CAMERA_FOLLOWS'* ]] \
   || fail "expected 'CAMERA_FOLLOWS' (isometric Camera3D tracks player)"
 
 # (B) framebuffer render bar: the composition root actually paints a non-blank frame
@@ -52,7 +64,7 @@ LOGC="$("$GUI_HELPER" --cmd "$GODOT --path $PROJ --script $PROOF" --wait 6 2>&1)
 CODEc=$?
 printf '%s\n' "$LOGC"
 [ "$CODEc" -eq 0 ] || fail "graphical-test-helper exited $CODEc (render bar not met)"
-printf '%s\n' "$LOGC" | grep -q 'RESULT=PASS' \
+[[ "$LOGC" == *'RESULT=PASS'* ]] \
   || fail "expected 'RESULT=PASS' from graphical-test-helper (framebuffer blank/uniform)"
 
 echo "MAIN_COMPOSITION_TEST: GATE PASS — composition root playable (RG2+RG3+C10+C17; non-blank render)"

@@ -39,7 +39,8 @@ printf '%s\n' "$LOG"
 
 # (3) The gate: exit code 0 AND the PASS marker present. Either missing => fail.
 [ "$CODE" -eq 0 ] || fail "BootTest exited $CODE (non-zero)"
-printf '%s\n' "$LOG" | grep -q 'BOOT_TEST: PASS signal received' \
+# bash-native substring check (no pipe => no SIGPIPE race under pipefail)
+[[ "$LOG" == *'BOOT_TEST: PASS signal received'* ]] \
   || fail "expected 'BOOT_TEST: PASS signal received' in output (C2 signal not received or boot failed)"
 
 echo "BOOT_TEST: GATE PASS — signal received, DI round-trip, boot order = registration order"

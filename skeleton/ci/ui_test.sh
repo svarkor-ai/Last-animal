@@ -58,7 +58,8 @@ LOGA="$(timeout 180 "$GODOT" --headless --path "$PROJ" --script "$UI_RENDER" 2>&
 CODEA=$?
 printf '%s\n' "$LOGA"
 [ "$CODEA" -eq 0 ] || fail "run A: render test exited $CODEA (non-zero)"
-printf '%s\n' "$LOGA" | grep -q "$PASS_MARKER" \
+# bash-native substring checks (no pipe => no SIGPIPE race under pipefail)
+[[ "$LOGA" == *"$PASS_MARKER"* ]] \
   || fail "run A: expected '$PASS_MARKER' marker (a C13 check went red)"
 
 # ---------------------------------------------------------------------------
@@ -78,7 +79,7 @@ LOGC="$("$GUI_HELPER" --cmd "$GODOT --path $PROJ --script $UI_RENDER" --wait 3 2
 CODEc=$?
 printf '%s\n' "$LOGC"
 [ "$CODEc" -eq 0 ] || fail "run C: graphical-test-helper exited $CODEc (non-blank render bar not met)"
-printf '%s\n' "$LOGC" | grep -q 'RESULT=PASS' \
+[[ "$LOGC" == *'RESULT=PASS'* ]] \
   || fail "run C: expected 'RESULT=PASS' from graphical-test-helper (framebuffer blank)"
 
 echo "UI_HUD_TEST: GATE PASS — C13 Hud/Dialogue/EmpathyPanel checks green (A), harness self-test red (B), non-blank framebuffer render (C)"
