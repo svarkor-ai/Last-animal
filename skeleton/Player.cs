@@ -1,5 +1,6 @@
 using Godot;
 using LastAnimal.Combat;
+using LastAnimal.Core;
 using LastAnimal.World;
 
 // Last Animal — M01 bridge CARD 3 (MC 1123.9, artemis, 2026-09-08).

@@ -49,7 +49,7 @@ public partial class BridgeMvpProof : SceneTree
     private CharacterBody3D? _player;
     private Hud? _hud;
     private EmpathyPanel? _empathy;
-    private CompanionActor? _companion;
+    private CompanionFollowBody? _companion;
     private readonly List<EnemyActor> _enemies = new();
 
     private int _frames;
@@ -91,7 +91,7 @@ public partial class BridgeMvpProof : SceneTree
         _player = main.GetNodeOrNull<CharacterBody3D>("Player");
         _hud = main.GetNodeOrNull<Hud>("UI/HudLayer/Hud");
         _empathy = main.GetNodeOrNull<EmpathyPanel>("UI/Empathy");
-        _companion = main.GetNodeOrNull<CompanionActor>("Companion");
+        _companion = main.GetNodeOrNull<CompanionFollowBody>("Companion");
         for (int i = 0; i < 8; i++)
         {
             var e = main.GetNodeOrNull<EnemyActor>($"Enemy{i}");
@@ -101,7 +101,7 @@ public partial class BridgeMvpProof : SceneTree
         if (_player == null) { Fail("Player node not found in main.tscn"); return; }
         if (_hud == null) { Fail("Hud not found at UI/HudLayer/Hud (WorldDirector UI not built)"); return; }
         if (_empathy == null) { Fail("EmpathyPanel not found at UI/Empathy"); return; }
-        if (_companion == null) { Fail("CompanionActor not found at Main/Companion"); return; }
+        if (_companion == null) { Fail("CompanionFollowBody not found at Main/Companion"); return; }
         if (_enemies.Count == 0) { Fail("WorldDirector spawned no EnemyActor"); return; }
 
         _dnaBefore = _hud.DnaMeter;
