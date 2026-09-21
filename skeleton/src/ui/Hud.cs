@@ -85,7 +85,13 @@ public partial class Hud : Control
         base._ExitTree();
     }
 
-    private void DisconnectBus(EventBus bus)
+    /// <summary>
+    /// Unsubscribe from the bus. Public since the T3b ownership refactor
+    /// (MC 1256.9): the runtime gate's no_bus negative control disconnects the
+    /// HUD to prove the meter freezes when the bus link is broken (design
+    /// 1256.2 §4.2). No gameplay behavior — a pure unsubscribe.
+    /// </summary>
+    public void DisconnectBus(EventBus bus)
     {
         bus.DnaExtracted -= OnDnaEvent;
         bus.DnaSpoken -= OnDnaEvent;
