@@ -2,6 +2,7 @@ using Godot;
 using LastAnimal.Combat;
 
 // Last Animal — W3-fix composition (MC 1123.10, artemis, 2026-09-08).
+// T3b ownership refactor (MC 1256.9, artemis, 2026-09-21): the AI is INJECTED.
 //
 // EnemyActor: the VISIBLE enemy body in the playable scene. It wraps a pure
 // M08 EnemyAI (C11, engine-free, REUSED verbatim — no AI logic re-authored
@@ -10,10 +11,11 @@ using LastAnimal.Combat;
 // so it is actually visible, and velocity toward the AI's target so it
 // approaches/chases the player.
 //
-// Each frame the shell ticks the pure EnemyAI toward the player's XZ position
-// and steers the physics body toward where the AI wants to be, then reports
-// how much damage the AI dealt this frame (so WorldDirector can apply it to
-// the HUD/player). Movement Y is handled purely by gravity (the AI is planar).
+// Ownership (design 1256.2 §2): the WorldDirector — the ONE composition root —
+// constructs the EnemyAI at spawn time and injects it via Configure(). This
+// shell no longer self-constructs its AI (the old `new EnemyAI(...)` here was
+// the second live AI-construction site); it only ticks and steers the injected
+// instance. Movement Y is handled purely by gravity (the AI is planar).
 namespace LastAnimal.World;
 
 [GlobalClass]
@@ -27,11 +29,14 @@ public partial class EnemyActor : CharacterBody3D
 
     public MeshInstance3D? Visual { get; private set; }
 
-    /// <summary>Configure the enemy: type, spawn position, entity id, mesh colour.</summary>
-    public void Configure(EnemyAI.Type type, float x, float z, int entityId, Color colour)
+    /// <summary>
+    /// Configure the enemy: the DIRECTOR-OWNED AI (injected — this shell never
+    /// constructs gameplay systems), spawn position and mesh colour.
+    /// </summary>
+    public void Configure(EnemyAI ai, float x, float z, Color colour)
     {
-        Kind = type;
-        Ai = new EnemyAI(new CombatVec3(x, 0f, z), entityId, type, seed: entityId);
+        Kind = ai.EnemyType;
+        Ai = ai;
         Position = new Vector3(x, 4f, z);   // spawn above the terrain, gravity settles it down
 
         var mesh = new MeshInstance3D { Name = "Visual" };
