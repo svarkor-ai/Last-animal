@@ -1,20 +1,26 @@
 using Godot;
+using LastAnimal.Companion;
 
-// Last Animal — W3-fix composition (MC 1123.10, artemis, 2026-09-08).
+// Last Animal — T3b ownership refactor (MC 1256.9, artemis, 2026-09-21).
 //
-// CompanionActor: a VISIBLE companion that follows the Player. A lightweight
-// Node3D with a coloured mesh that lerps toward a target node (the Player),
-// staying on a fixed Y baseline. This gives the scene a companion you can
-// actually see trail the player, per the composition bar CARD 3/CARD 6.
+// CompanionFollowBody: the VISIBLE companion body in the playable scene,
+// replacing world/CompanionActor.cs (deleted per design 1256.2 §3). The old
+// CompanionActor was a bare lerp-follower with NO machine reference — the
+// machine and the visible body were two different companions.
 //
-// (Note: the committed src/companion/CompanionEntity.cs is a Skeleton3D rig +
-// animation hook with NO follow-to-player logic and no visible skinned mesh,
-// so a bare instance renders nothing visible. This actor is the small visible
-// follow body; the rig/anim pipeline (M09/C12) is out of this MVP's scope.)
+// This node composes the REAL CompanionEntity (src/companion/CompanionEntity.cs,
+// the M05 rig + AnimationPlayer driven by the director-owned machine) as a
+// child, and adds the follow-to-player movement the rig entity lacks. The
+// director constructs it with the SAME CompanionStateMachine it owns and ticks
+// the entity's Advance() in its own _Process — so the machine and the visible
+// body are one companion (the integration fix the design names).
+//
+// It owns NO gameplay logic: movement is presentation, loyalty is M03's,
+// behavior is the machine's (I1).
 namespace LastAnimal.World;
 
 [GlobalClass]
-public partial class CompanionActor : Node3D
+public partial class CompanionFollowBody : Node3D
 {
     /// <summary>The node to follow (the Player).</summary>
     [Export] public Node3D? Target { get; set; }
@@ -28,9 +34,20 @@ public partial class CompanionActor : Node3D
     /// <summary>Height the companion sits above the terrain baseline.</summary>
     [Export] public float Y { get; set; } = 0.55f;
 
+    /// <summary>The machine-wired entity (rig + animation), ticked by the director.</summary>
+    public CompanionEntity Entity { get; }
+
+    public CompanionFollowBody(CompanionStateMachine machine, CompanionAnimationHook hook)
+    {
+        Entity = new CompanionEntity(machine, hook) { Name = "Entity" };
+    }
+
     public override void _Ready()
     {
-        // A clearly visible companion marker (gold), distinct from player/enemies.
+        AddChild(Entity);
+
+        // A clearly visible companion marker (gold), distinct from player/enemies,
+        // so the rig's bones have a readable silhouette on llvmpipe software GL.
         var mesh = new MeshInstance3D { Name = "Visual" };
         mesh.Mesh = new CapsuleMesh { Radius = 0.4f, Height = 1.6f };
         var mat = new StandardMaterial3D { AlbedoColor = new Color(0.95f, 0.75f, 0.15f), Roughness = 0.6f };
