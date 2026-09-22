@@ -73,6 +73,7 @@
     <Compile Include="world/WorldDirector.cs" />
     <Compile Include="ci_proofs/MainCompositionProof.cs" />
     <Compile Include="ci_proofs/BridgeMvpProof.cs" />
+    <Compile Include="ci_proofs/RuntimeIntegrationProof.cs" />
     <Compile Include="tests/BootTest.cs" />
     <Compile Include="tests/EmpathySignalTest.cs" />
     <Compile Include="tests/companion/CompanionRenderTest.cs" />
