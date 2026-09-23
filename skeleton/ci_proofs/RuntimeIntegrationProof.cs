@@ -7,6 +7,7 @@ using LastAnimal.Save;
 using LastAnimal.Ui;
 using LastAnimal.World;
 using System.Collections.Generic;
+using System.Linq;
 
 // Last Animal — T3b runtime integration proof (MC 1256.10, bernie, 2026-09-20).
 //
@@ -40,6 +41,11 @@ using System.Collections.Generic;
 public partial class RuntimeIntegrationProof : SceneTree
 {
     private const int MoveFrames = 12;
+    // MC 1344.1: movement is applied in _PhysicsProcess ticks. Headless --script
+    // process frames are uncapped, so counting process frames measures wall-clock
+    // frames, not engine time. Count physics ticks instead (BridgeMvpProof pattern).
+    private int _physFrames;
+    private int _pressPhysFrame;
     private const int AttackBudgetFrames = 240;   // input-path kill budget
     private const int FollowFrames = 40;
     private const int HoldFrames = 600;           // post-PASS hold for the render bar
@@ -56,6 +62,8 @@ public partial class RuntimeIntegrationProof : SceneTree
     private int _frames;
     private int _stage;
     private int _stageFrames;
+    private Node3D? _main;      // composition root, resolved in _Initialize (MC 1344.1)
+    private bool _composed;     // _ComposeDeferred has run (MC 1344.1)
     private bool _failed;
     private bool _asserted;
     private int _dnaCount;
@@ -74,27 +82,41 @@ public partial class RuntimeIntegrationProof : SceneTree
         _mode = System.Environment.GetEnvironmentVariable("LA_GATE_MODE") ?? "positive";
         GD.Print($"LA_GATE: mode={_mode}");
 
-        _bus = Root.GetNodeOrNull<EventBus>("/root/EventBus");
-        if (_bus == null)
-        {
-            _bus = new EventBus { Name = "EventBus" };
-            Root.AddChild(_bus);
-            GD.Print("LA_GATE: autoload EventBus absent — created a local bus");
-        }
-        _bus.DnaExtracted += _ => _dnaCount++;
+        // MC 1344.1: in --script mode the autoload EventBus loads AFTER _Initialize,
+        // and the HUD is built by WorldDirector.BuildUi() in _Ready — both unavailable
+        // here. Do NOT create a local bus (it collides with the autoload at
+        // /root/EventBus and splits the wire); resolve bus + HUD in _ComposeDeferred
+        // on the first _Process frame, after the scene _Ready has run.
+        // Harness fix (MC 1344.1): cap process frames so physics ticks accumulate
+        // normally (same pattern as BridgeMvpProof).
+        Engine.MaxFps = 60;
 
         // Instance the composition root (a --script run does not load main_scene).
         var packed = GD.Load<PackedScene>("res://main.tscn");
         if (packed == null) { Fail("cannot load res://main.tscn"); return; }
         Node3D main = packed.Instantiate<Node3D>();
+        // no_spawn: disable enemy spawning BEFORE the director populates — the
+        // director spawns in _Ready, which runs at AddChild, so the flag must be
+        // set on the INSTANTIATED (not yet added) node (MC 1344.1).
+        if (_mode == "no_spawn" && main is WorldDirector d) d.SetSpawningEnabled(false);
         Root.AddChild(main);
+
+        _main = main;
+    }
+
+    private void _ComposeDeferred()
+    {
+        var main = _main!;
+        _bus = Root.GetNodeOrNull<EventBus>("/root/EventBus");
+        if (_bus == null) { Fail("EventBus autoload not present even after scene _Ready"); return; }
+        _bus.DnaExtracted += _ => _dnaCount++;
 
         _director = main as WorldDirector;
         if (_director == null) { Fail("main.tscn root is not WorldDirector"); return; }
 
         _playerBody = main.GetNodeOrNull<CharacterBody3D>("Player");
         _hud = main.GetNodeOrNull<Hud>("UI/HudLayer/Hud");
-        _companion = main.GetNodeOrNull<CompanionEntity>("Companion");
+        _companion = main.GetNodeOrNull<CompanionEntity>("Companion/Entity");
         for (int i = 0; i < 8; i++)
         {
             var e = main.GetNodeOrNull<EnemyActor>($"Enemy{i}");
@@ -103,10 +125,7 @@ public partial class RuntimeIntegrationProof : SceneTree
 
         if (_playerBody == null) { Fail("Player node not found in main.tscn"); return; }
         if (_hud == null) { Fail("Hud not found at UI/HudLayer/Hud (WorldDirector UI not built)"); return; }
-        if (_companion == null) { Fail("CompanionEntity not found at Main/Companion (director must spawn the machine-wired entity)"); return; }
-
-        // no_spawn: disable enemy spawning BEFORE the director populates.
-        if (_mode == "no_spawn") _director.SetSpawningEnabled(false);
+        if (_companion == null) { Fail("CompanionEntity not found at Main/Companion/Entity (director must spawn the machine-wired entity)"); return; }
 
         if (_mode == "no_spawn")
         {
@@ -137,13 +156,33 @@ public partial class RuntimeIntegrationProof : SceneTree
         // happens but the bus never hears it.
         if (_mode == "no_dna") _director.SetDnaForwarding(false);
 
+        // Capture the movement baseline BEFORE pressing the input (MC 1344.1):
+        // stage 0 ran after the press, by which time the player had already moved.
+        _playerStart = _playerBody.GlobalPosition;
+        _pressPhysFrame = _physFrames;
+
         Input.ActionPress("move_right");
         GD.Print($"LA_GATE: composed — Player + {_enemies.Count} enemies + Hud + CompanionEntity (dnaBefore={_dnaBefore})");
+    }
+
+    public override bool _PhysicsProcess(double delta)
+    {
+        _physFrames++;   // MC 1344.1: physics-tick counter (return false = keep running)
+        return false;
     }
 
     public override bool _Process(double delta)
     {
         if (_failed) return true;
+        if (!_composed)
+        {
+            // First frame: the scene is in the tree and _Ready() has run —
+            // resolve the bus/HUD/enemy references now (MC 1344.1).
+            if (_main == null) return true;
+            _ComposeDeferred();
+            _composed = true;
+            return false;
+        }
         if (_director == null || _playerBody == null || _hud == null || _companion == null || _bus == null)
             return true;
 
@@ -154,14 +193,16 @@ public partial class RuntimeIntegrationProof : SceneTree
         switch (_stage)
         {
             case 0:
-                // First live frame: nodes are inside the tree — baselines.
-                _playerStart = _playerBody.GlobalPosition;
+                // Baseline was captured in _ComposeDeferred BEFORE the press
+                // (MC 1344.1) — go straight to the movement stage.
                 _stage = 1;
                 _stageFrames = 0;
                 break;
 
             case 1:
-                if (_stageFrames >= MoveFrames)
+                // Count physics ticks SINCE THE PRESS (MC 1344.1): process frames
+                // are uncapped headless, physics ticks are the real engine time.
+                if (_physFrames >= _pressPhysFrame + MoveFrames)
                 {
                     Vector3 now = _playerBody.GlobalPosition;
                     float dx = now.X - _playerStart.X;
@@ -176,13 +217,19 @@ public partial class RuntimeIntegrationProof : SceneTree
                     // through GameBootstrap — instance identity, not class.
                     var resolved = Root.GetNodeOrNull<GameBootstrap>("/root/GameBootstrap")?.Resolve<PlayerController>();
                     if (resolved == null) { Fail("GameBootstrap.Resolve<PlayerController>() returned null — director did not bind its controller"); return true; }
-                    if (!ReferenceEquals(resolved, _director.PlayerModel))
+                    // no_controller mode INJECTS the decoy binding — the identity
+                    // mismatch is the defect under test, detected in stage 2 via
+                    // the AI-target mismatch (NEG_CONTROLLER). Skip here (MC 1344.1).
+                    if (_mode != "no_controller" && !ReferenceEquals(resolved, _director.PlayerModel))
                     {
                         Fail("resolved PlayerController is NOT the director-owned instance (two live controllers)");
                         return true;
                     }
                     float modelDx = resolved.Position.X - _director.PlayerModel.Position.X;
-                    if (System.Math.Abs(modelDx) > 0.0001f)
+                    // no_controller mode: the decoy position diverges by design —
+                    // that divergence is the defect under test (NEG_CONTROLLER in
+                    // stage 2), not a failure here (MC 1344.1).
+                    if (_mode != "no_controller" && System.Math.Abs(modelDx) > 0.0001f)
                     {
                         Fail("resolved controller position diverged from the director's model");
                         return true;
@@ -247,6 +294,20 @@ public partial class RuntimeIntegrationProof : SceneTree
                 }
                 else if (_stageFrames > AttackBudgetFrames)
                 {
+                    // no_dna mode: the kill DOES land (forwarding is blocked, so the
+                    // bus counter never moves — that is the point). Detect the kill
+                    // via the enemy's death and assert the bus stayed silent.
+                    if (_mode == "no_dna")
+                    {
+                        bool anyDead = _enemies.Any(e => e.IsDead);
+                        if (anyDead && _dnaCount == 0)
+                        {
+                            Input.ActionRelease("attack");
+                            GD.Print("LA_GATE: NEG_DNA: kill landed (enemy dead) but DnaExtracted never reached the bus (forwarding blocked) — break detected");
+                            Quit(1);
+                            return true;
+                        }
+                    }
                     Fail("kill did not land within the attack budget (input -> director -> CombatSystem path broken)");
                 }
                 else
