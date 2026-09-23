@@ -8,6 +8,8 @@ using LastAnimal.Save;
 using LastAnimal.Ui;
 using LastAnimal.World;
 using System.Collections.Generic;
+using System.Linq;
+using System;
 
 // Last Animal — W7 bridge_mvp_proof (MC 1123.14; redo of MC 1123.8, artifact never landed).
 //
@@ -39,13 +41,14 @@ using System.Collections.Generic;
 // Run:  $GODOT --headless --path <proj> --script res://ci_proofs/BridgeMvpProof.cs
 public partial class BridgeMvpProof : SceneTree
 {
-    private const int MoveFrames = 12;         // WASD accumulation before the move assert
+    private const int MovePhysicsFrames = 30;  // WASD accumulation in PHYSICS ticks (0.5s @ 60Hz) before the move assert (headless uncapped frames are tiny; 12 gave dx=0.031 < 0.05, MC 1256.14)
     private const int AttackBudgetFrames = 60; // input-path kill budget before seam fallback
-    private const int FollowFrames = 40;       // frames the companion gets to close distance
+    private const int FollowFrames = 120;      // frames the companion gets to close distance (headless uncapped frames are tiny; 40 gave moved<0.2, MC 1256.14)
     private const int HoldFrames = 600;        // post-PASS hold for the graphical capture
-    private const int FrameBudget = 1200;      // hard overall budget
+    private const int FrameBudget = 2400;      // hard overall budget (raised: MoveFrames 60 + FollowFrames 120 + attack budget need headroom, MC 1256.14)
 
     private EventBus? _bus;
+    private Node3D? _main;
     private CharacterBody3D? _player;
     private Hud? _hud;
     private EmpathyPanel? _empathy;
@@ -58,6 +61,7 @@ public partial class BridgeMvpProof : SceneTree
     private bool _failed;
     private bool _asserted;
     private bool _killedViaSeam;
+    private bool _composed;
     private int _dnaCount;
     private int _bookOpenedCount;
     private int _dnaBefore;
@@ -65,29 +69,62 @@ public partial class BridgeMvpProof : SceneTree
     private Vector3 _companionStart;
     private float _followDist0;
     private int _attackToggle;
+    private int _physFrames;    // physics ticks elapsed since compose (movement is physics-driven)
+    private int _pressPhysFrame; // physics tick at which move_right was pressed (MC 1344.1)
+    // (loyalty, hearts) pairs recorded from every LoyaltyChanged event (MC 1344.1 marker-3).
+    private readonly List<(int loy, int hearts)> _loyaltyPairs = new();
+    private int _loyaltyPending; // loyalty of the emit currently in flight (MC 1344.1)
+
+    public override bool _PhysicsProcess(double delta)
+    {
+        _physFrames++;
+        return false; // false = keep the main loop running (true would quit the SceneTree)
+    }
 
     public override void _Initialize()
     {
         GD.Print("BRIDGE_MVP_PROOF: start");
 
+        // Harness fix (MC 1344.1): headless --script process frames are uncapped,
+        // so 60 process frames span <1/60s of engine time and only ~0-2 physics
+        // ticks fire — the player barely moves. Cap the FPS so process-frame
+        // deltas match a real 60 FPS run and physics ticks accumulate normally.
+        Engine.MaxFps = 60;
+
         // The C2 bus: the real autoload when the engine loaded it, else a local one.
         // (SceneTree has no GetNodeOrNull — use Root.GetNodeOrNull, MC 1256.5 build fix.)
+        // MC 1344.1: in --script mode the autoload EventBus loads AFTER _Initialize,
+        // so a local bus created here COLLIDES with the autoload at /root/EventBus and
+        // the HUD ends up wired to the autoload while the proof emits on the local
+        // bus — the loyalty emit never reaches the HUD. Do NOT create a local bus:
+        // resolve the autoload lazily in _Compose (after the scene _Ready ran) and
+        // subscribe there.
         _bus = Root.GetNodeOrNull<EventBus>("/root/EventBus");
-        if (_bus == null)
+        if (_bus != null)
         {
-            _bus = new EventBus { Name = "EventBus" };
-            Root.AddChild(_bus);
-            GD.Print("BRIDGE_MVP_PROOF: autoload EventBus absent — created a local bus");
+            _bus.DnaExtracted += _ => _dnaCount++;
+            _bus.EmpathyBookOpened += () => _bookOpenedCount++;
+            _bus.LoyaltyChanged += (_, loy) => _loyaltyPending = (int)loy;
         }
-        _bus.DnaExtracted += _ => _dnaCount++;
-        _bus.EmpathyBookOpened += () => _bookOpenedCount++;
 
         // Instance the composition root (a --script run does not load main_scene).
+        // NOTE: the HUD/Empathy/Companion lookups are DEFERRED to the first
+        // _Process frame (see _Compose) — WorldDirector.BuildUi() runs in
+        // _Ready(), which has not executed yet during _Initialize(), and
+        // get_node with absolute paths is illegal from outside the active
+        // tree here (MC 1256.14).
         var packed = GD.Load<PackedScene>("res://main.tscn");
         if (packed == null) { Fail("cannot load res://main.tscn"); return; }
         Node3D main = packed.Instantiate<Node3D>();
         Root.AddChild(main);
+        _main = main;
+    }
 
+    private void _Compose()
+    {
+        // First _Process frame: main.tscn is inside the tree and WorldDirector
+        //._Ready() (incl. BuildUi) has run — the lookups are now valid.
+        Node3D main = _main!;
         _player = main.GetNodeOrNull<CharacterBody3D>("Player");
         _hud = main.GetNodeOrNull<Hud>("UI/HudLayer/Hud");
         _empathy = main.GetNodeOrNull<EmpathyPanel>("UI/Empathy");
@@ -104,17 +141,46 @@ public partial class BridgeMvpProof : SceneTree
         if (_companion == null) { Fail("CompanionFollowBody not found at Main/Companion"); return; }
         if (_enemies.Count == 0) { Fail("WorldDirector spawned no EnemyActor"); return; }
 
+        // MC 1344.1: the autoload EventBus may only exist by now (it loads after
+        // _Initialize in --script mode). Resolve it here if _Initialize missed it,
+        // and subscribe the counters on the SAME bus the game's nodes use.
+        if (_bus == null)
+        {
+            _bus = Root.GetNodeOrNull<EventBus>("/root/EventBus");
+            if (_bus == null) { Fail("EventBus autoload not present even after scene _Ready"); return; }
+            _bus.DnaExtracted += _ => _dnaCount++;
+            _bus.EmpathyBookOpened += () => _bookOpenedCount++;
+            _bus.LoyaltyChanged += (_, loy) => _loyaltyPending = (int)loy;
+        }
+
         _dnaBefore = _hud.DnaMeter;
+
+        // Capture the movement baseline BEFORE pressing the input (MC 1344.1 root
+        // cause): the previous code captured it in stage 0 — the _Process frame
+        // AFTER the press — by which time the player had already walked ~0.5 units
+        // and Enemy0 (spawned 2 units ahead, chasing at 3 u/s) had closed to contact
+        // range and body-blocked further motion, so the late baseline measured dx=0.
+        _playerStart = _player.GlobalPosition;
+        _pressPhysFrame = _physFrames;
 
         // Press walk-right BEFORE any remaining early return: from here on every
         // fail path releases the inputs, so no loop runs them unpressed.
         Input.ActionPress("move_right");
         GD.Print($"BRIDGE_MVP_PROOF: composed — Player + {_enemies.Count} enemies + Hud + EmpathyPanel + Companion (dnaBefore={_dnaBefore})");
+        _composed = true;
     }
 
     public override bool _Process(double delta)
     {
         if (_failed) return true;
+        if (!_composed)
+        {
+            // First frame: the scene is in the tree and _Ready() has run —
+            // resolve the HUD/Empathy/Companion references now (MC 1256.14).
+            if (_main == null) return true;
+            _Compose();
+            return false;
+        }
         if (_player == null || _hud == null || _empathy == null || _companion == null || _bus == null)
             return true;
 
@@ -125,21 +191,24 @@ public partial class BridgeMvpProof : SceneTree
         switch (_stage)
         {
             case 0:
-                // First live frame: the nodes are inside the tree now — baselines.
-                _playerStart = _player.GlobalPosition;
+                // Baseline was captured in _Compose BEFORE the press (MC 1344.1) —
+                // go straight to the movement stage.
                 _stage = 1;
                 _stageFrames = 0;
                 break;
 
             case 1:
-                if (_stageFrames >= MoveFrames)
+                // Movement is applied in _PhysicsProcess ticks, not process frames —
+                // count physics ticks SINCE THE PRESS so the assert measures real
+                // engine time from the moment input went down (MC 1344.1).
+                if (_physFrames >= _pressPhysFrame + MovePhysicsFrames)
                 {
                     Vector3 now = _player.GlobalPosition;
                     float dx = now.X - _playerStart.X;
                     float dz = now.Z - _playerStart.Z;
                     if (!(dx > 0.05f || dz > 0.05f))
                     {
-                        Fail($"player did not move on simulated WASD (dx={dx:0.###}, dz={dz:0.###})");
+                        Fail($"player did not move on simulated WASD (dx={dx:0.###}, dz={dz:0.###}, physFrames={_physFrames})");
                         return true;
                     }
                     Input.ActionRelease("move_right");
@@ -190,9 +259,24 @@ public partial class BridgeMvpProof : SceneTree
                 {
                     // HUD_BOUND: the bus moves the bus-driven gauges; the combat seam
                     // moves Life. Synchronous checks right after each emit.
+                    // MC 1344.1: the game's own companion tick ALSO emits LoyaltyChanged
+                    // (fresh core loyalty 100 -> 5 hearts) and can land after the proof's
+                    // emit, overwriting the HUD. Assert the MAPPING on every event seen
+                    // instead of the final HUD value: subscribe in _Compose, record
+                    // (loyalty, hearts) pairs, and require hearts == round(loy/20) for
+                    // each pair — plus the proof's own 80 -> 4 pair present.
                     _bus.EmitLoyaltyChanged(new CompanionId("proof-companion"), 80);
-                    Check("Hud.CompanionHearts follows LoyaltyChanged (80/20 -> 4 hearts)",
-                          _hud.CompanionHearts == 4, $"hearts={_hud.CompanionHearts}");
+                    // Godot signals are synchronous: when EmitLoyaltyChanged returns,
+                    // the HUD handler has already run — record the pair now.
+                    if (_loyaltyPending >= 0)
+                        _loyaltyPairs.Add((_loyaltyPending, _hud!.CompanionHearts));
+                    _loyaltyPending = -1;
+                    bool sawProofPair = _loyaltyPairs.Any(p => p.loy == 80 && p.hearts == 4);
+                    bool mappingHolds = _loyaltyPairs.All(p =>
+                        p.hearts == Math.Clamp((int)Math.Round(p.loy / 20.0), 0, 5));
+                    Check("Hud.CompanionHearts follows LoyaltyChanged (mapping holds for every event; 80 -> 4 seen)",
+                          sawProofPair && mappingHolds,
+                          $"pairs={string.Join(";", _loyaltyPairs.Select(p => $"{p.loy}->{p.hearts}"))}");
                     if (_failed) return true;
                     _hud.UpdateLife(77);
                     Check("Hud.Life follows the combat seam (UpdateLife)",
