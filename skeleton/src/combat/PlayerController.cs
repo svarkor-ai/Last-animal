@@ -74,6 +74,18 @@ public class PlayerController
         if (Health == 0) CurrentState = State.Dead;
     }
 
+    /// <summary>
+    /// Restore health (MC 1348 N1 save/load recovery): the F9 load path uses
+    /// this to rescue a dead player — a restored live HP value clears IsDead
+    /// so Move works again. Clamped to MaxHealth; a live player keeps its
+    /// current state.
+    /// </summary>
+    public void RestoreHealth(int health)
+    {
+        Health = Math.Min(MaxHealth, Math.Max(0, health));
+        if (!IsDead && CurrentState == State.Dead) CurrentState = State.Idle;
+    }
+
     /// <summary>Track that an enemy is within melee reach (engaged).</summary>
     public void EngageEnemy(int entityId) => _engaged.Add(entityId);
 

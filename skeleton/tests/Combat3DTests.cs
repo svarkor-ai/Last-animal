@@ -218,6 +218,32 @@ public class Combat3DTests
         Assert.Equal(new CombatVec3(0, 0, 0), pos);
     }
 
+    [Fact]
+    public void PlayerController_RestoreHealth_RevivesDeadPlayer()
+    {
+        // MC 1348 N1: the load path must rescue a dead player — restored
+        // health clears IsDead so movement works again.
+        var p = new PlayerController(new CombatVec3(0, 0, 0));
+        p.TakeDamage(999);
+        Assert.True(p.IsDead);
+
+        p.RestoreHealth(100);
+        Assert.False(p.IsDead);
+        Assert.Equal(100, p.Health);
+        var pos = p.Move(new CombatVec3(1, 0, 0), 1.0f);
+        Assert.Equal(5.0f, pos.X, 3);
+    }
+
+    [Fact]
+    public void PlayerController_RestoreHealth_ClampsToMax_AndKeepsLiveState()
+    {
+        var p = new PlayerController(new CombatVec3(0, 0, 0));
+        p.Move(new CombatVec3(1, 0, 0), 1.0f);
+        p.RestoreHealth(999);
+        Assert.Equal(p.MaxHealth, p.Health);
+        Assert.Equal(PlayerController.State.Run, p.CurrentState);
+    }
+
     // =====================================================================
     // Phase 10 DoD — keystone combat sim: N frames, >=1 enemy engaged,
     // kill triggers DnaExtracted (exit 0).
