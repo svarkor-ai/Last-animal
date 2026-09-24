@@ -9,9 +9,11 @@ and [player-guide.md](player-guide.md).
 | File | What it is |
 |---|---|
 | `build/LastAnimal.exe` | Windows x86_64 release export of the full game (main scene `res://main.tscn`), embedded pck (`binary_format/embed_pck=true`), ~109 MB. |
-| `build/LastAnimal-windows-x86_64.zip` | Distributable zip containing that .exe, ~38 MB. |
+| `build/data_LastAnimalPreflight_windows_x86_64/` | The .NET assemblies the .exe loads at startup (`coreclr.dll`, `hostfxr.dll`, `GodotSharp.dll`, `LastAnimalPreflight.dll`, …), ~80 MB. Must sit beside the .exe. |
+| `build/LastAnimal-windows-x86_64.zip` | Distributable zip containing the .exe AND that data dir, ~73 MB. |
 
-Both are produced by one command from the repo root:
+All three are produced by one command from `skeleton/` (the project root —
+the script lives in `skeleton/tools/`, not at the repo root):
 
 ```bash
 bash tools/export_windows.sh
@@ -24,11 +26,16 @@ The script runs three steps and fails loudly on any of them:
    `godot --headless --export-release`, and proves the output is a real PE
    (`MZ` magic) that carries the C# assembly, the GodotSharp runtime and the
    godot-mono runtimeconfig markers. Zero export ERROR lines is part of the gate.
-2. **Packaging** — zips the .exe into `build/LastAnimal-windows-x86_64.zip`
-   (python3 `zipfile`; the `zip` CLI is not installed on the build host).
+2. **Packaging** — zips the .exe AND the `data_LastAnimalPreflight_windows_x86_64/`
+   assemblies dir into `build/LastAnimal-windows-x86_64.zip` (python3
+   `zipfile`; the `zip` CLI is not installed on the build host). The step
+   fails loudly if the data dir is missing or the zip lacks the game
+   assembly — an exe-only zip cannot launch (MC 1347).
 3. **Smoke** — if `wine` is installed, the packaged binary is headless-launched
    (`wine build/LastAnimal.exe --headless --quit-after 120`, must exit 0).
-   On the current build host **wine is unavailable**, so the script prints
+   The smoke asserts only exit 0 — the C16 contract's ">0 non-blank frames"
+   leg needs a wine-capable host and is not asserted by this script. On the
+   current build host **wine is unavailable**, so the script prints
    `wine UNAVAILABLE ... NOT run (not faked)` and exits 0 with the step-1
    checks as the executed evidence. This is stated, never hidden.
 
@@ -70,10 +77,14 @@ Headless CI checks live in `ci/` (`smoke.sh`, `export_check.sh`, the per-module
 
 ## Windows runtime requirements (player machine)
 
-The release export embeds the pck and the Godot runtime in the .exe, so the
-player machine needs **no Godot editor and no .NET SDK** to play — UNVERIFIED:
-this is what the export settings (`embed_pck=true`, release template) imply,
-but it has not been proven on a clean Windows machine because no Windows host
-and no wine were available this run. Treat "no .NET needed" as expected, not
-proven; if the game fails to start on a player machine, installing the .NET 8
-desktop runtime is the first thing to try.
+The release export embeds the pck and the Godot runtime in the .exe, but the
+C#/.NET assemblies are NOT embedded: the mono template writes them to
+`data_LastAnimalPreflight_windows_x86_64/` beside the .exe, and the .exe loads
+`hostfxr.dll` and the assemblies from that directory at startup (its own
+embedded error string is "Unable to find the .NET assemblies directory.").
+The zip ships both, and they must stay side by side after extraction. The
+player machine still needs **no Godot editor and no .NET SDK** — the .NET
+runtime ships in the data dir — UNVERIFIED on a clean Windows machine: no
+Windows host and no wine were available this run. If the game fails to start
+on a player machine, check first that the data dir is beside the .exe, then
+try installing the .NET 8 desktop runtime.
