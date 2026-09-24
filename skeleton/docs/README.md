@@ -21,10 +21,12 @@ explicit, per PHASE0.md. The deliverable is a Windows .exe/.zip you run locally.
   the hash of the delivered build is recorded in the run's evidence file
   (MC 1344), not here.
 - `build/LastAnimal-windows-x86_64.zip` — the distributable package containing
-  that .exe, ~38 MB (38,125,578 bytes for the same build).
+  that .exe and the `data_LastAnimalPreflight_windows_x86_64/` assemblies dir
+  beside it, ~73 MB (73,036,740 bytes for the same build repackaged with the
+  data dir, MC 1347).
 
-Both are produced by `bash tools/export_windows.sh` from the repo root; see
-[build-and-run.md](build-and-run.md).
+Both are produced by `bash tools/export_windows.sh` from `skeleton/` (the
+script lives in `skeleton/tools/`); see [build-and-run.md](build-and-run.md).
 
 ## Known limitation (stated, not hidden)
 
