@@ -71,6 +71,7 @@
     <Compile Include="world/EnemyActor.cs" />
     <Compile Include="world/CompanionFollowBody.cs" />
     <Compile Include="world/WorldDirector.cs" />
+    <Compile Include="world/SaveLoadController.cs" />
     <Compile Include="ci_proofs/MainCompositionProof.cs" />
     <Compile Include="ci_proofs/BridgeMvpProof.cs" />
     <Compile Include="ci_proofs/RuntimeIntegrationProof.cs" />

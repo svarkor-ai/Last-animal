@@ -6,7 +6,6 @@ using LastAnimal.Core.Framework;
 using LastAnimal.Dna;
 using LastAnimal.Ecosystem;
 using LastAnimal.Npc;
-using LastAnimal.Save;
 using LastAnimal.Ui;
 using System.Collections.Generic;
 
@@ -28,7 +27,8 @@ using System.Collections.Generic;
 //     path; OnKill's extraction feeds _spokenDna and the bus — no hardcoded
 //     species string),
 //   - applies the zone's SpawnSet on zone entry (spawns from it, not discards),
-//   - owns the save/load actions (SaveSystem + GodotSaveStore),
+//   - owns the save/load actions via SaveLoadController (SaveSystem +
+//     GodotSaveStore; MC 1344),
 //   - builds + wires the HUD / DialogueSystem / EmpathyPanel on the UI
 //     CanvasLayer (Bind + ConnectBus) so the C2 bus drives the readouts.
 //
@@ -66,9 +66,11 @@ public partial class WorldDirector : Node3D
     // Gate seams (design §4.2): one-line bool guards, default true, no gameplay behavior.
     private bool _spawningEnabled = true;
     private bool _dnaForwarding = true;
+    private bool _interactEnabled = true;
 
     private EventBus _bus = null!;
     private GameBootstrap _bootstrap = null!;
+    private SaveLoadController _saveLoad = null!;
 
     private Hud _hud = null!;
     private DialogueSystem _dialogue = null!;
@@ -83,11 +85,17 @@ public partial class WorldDirector : Node3D
         ( 0f, -5f),
     };
 
+    // Interact reach: must exceed the companion's FollowDistance (3.5) so the
+    // trailing companion is talkable when the player stops.
+    private const float TalkRange = 4.5f;
+
     // --- read-only surface the runtime proof reads (proof-only, no logic) ----
     public PlayerController PlayerModel => _player;
     public CombatSystem Combat => _combat;
     public IReadOnlyList<LanguageSignature> SpokenDna => _spokenDna;
     public CompanionStateMachine Companion => _companion;
+    public string CurrentZone => _zone;
+    public int Progression => _saveLoad.Progression;
 
     public override void _Ready()
     {
@@ -133,6 +141,10 @@ public partial class WorldDirector : Node3D
         _ecosystem.ZoneEntered += OnZoneEntered;
 
         BuildUi();
+        _saveLoad = new SaveLoadController(
+            _spokenDna, _companionCore, _hud,
+            currentZone: () => _zone,
+            enterZone: EnterZone);
         SpawnEnemies();
         SpawnCompanion();
         EnterZone(_zone);
@@ -183,6 +195,12 @@ public partial class WorldDirector : Node3D
 
         if (Input.IsActionJustPressed("attack"))
             TryAttack();
+        if (Input.IsActionJustPressed("interact"))
+            TryInteract();
+        if (Input.IsActionJustPressed("save_game"))
+            _saveLoad.Save();
+        if (Input.IsActionJustPressed("load_game"))
+            _saveLoad.Load();
     }
 
     private void BuildUi()
@@ -293,6 +311,40 @@ public partial class WorldDirector : Node3D
         }
     }
 
+    // C4 speak half + C13 (MC 1344 DA findings): the production trigger for
+    // DNA-speak and dialogue. Interact near a living NPC (the companion or an
+    // enemy) -> DnaLanguage.Speak -> EventBus.DnaSpoken (C2) and the dialogue
+    // box opens on that NPC's node. Same idiom as TryAttack: nearest target
+    // within range, no second input mechanism.
+    private void TryInteract()
+    {
+        if (Player == null || !_interactEnabled) return;
+        Vector3 ppos = Player.GlobalPosition;
+
+        Node3D? npc = null;
+        int npcId = 0;
+        float best = TalkRange;
+        if (_companionBody != null)
+        {
+            float d = (_companionBody.GlobalPosition - ppos).Length();
+            if (d <= best) { best = d; npc = _companionBody; npcId = _companionCore.CompanionEntityId; }
+        }
+        foreach (var e in _enemies)
+        {
+            if (e.IsDead) continue;
+            float d = (e.GlobalPosition - ppos).Length();
+            if (d <= best) { best = d; npc = e; npcId = e.Ai.EntityId; }
+        }
+        if (npc == null) return;
+
+        var sig = DnaLanguage.SignatureForEntity(npcId);
+        var msg = _dna.Speak(sig, targetEntityId: 0);
+        if (msg == null) return;
+        _bus.EmitDnaSpoken(new DnaSignature(sig.SpeciesHash, msg.SourceEntityId.ToString()));
+        _dialogue.Show($"npc_{npcId}");
+        GD.Print($"W3: interact -> DnaLanguage.Speak (npc={npcId}) -> DnaSpoken + DialogueSystem.Show");
+    }
+
     // C10 -> M02 -> C2: an OnKill extraction appends to the spoken history and
     // forwards to the EventBus. This is the ONLY writer of _spokenDna.
     private void OnDnaExtracted(LanguageSignature signature)
@@ -306,6 +358,7 @@ public partial class WorldDirector : Node3D
     private void OnZoneEntered(string zoneId, SpawnSet set)
     {
         _zone = zoneId;
+        _saveLoad.OnZoneEntered(zoneId);
         ApplySpawnSet(set);
         GD.Print($"W3: zone '{zoneId}' SpawnSet applied (enemies={set.Count}, adaptation={set.AdaptationLevel:0.##})");
     }
@@ -316,51 +369,16 @@ public partial class WorldDirector : Node3D
         _ecosystem.OnZoneEnter(zoneId, profile);
     }
 
-    // ---- save/load (design §4.4): the director owns the actions ------------
+    // ---- save/load (design §4.4): delegated to SaveLoadController (MC 1344) -
 
-    public void SaveGame()
-    {
-        var state = new GameState
-        {
-            ZoneId = _zone,
-            Progression = 0,
-            // LearnedDnaCounters: the per-position most-common nucleotide of the
-            // spoken history (the C14 "persists DNA counters" snapshot).
-            LearnedDnaCounters = BuildLearnedCounters(),
-            CompanionEntityId = _companionCore.CompanionEntityId,
-            CompanionLoyalty = _companionCore.Loyalty,
-        };
-        SaveSystem.Save(state, new GodotSaveStore());
-    }
+    /// <summary>Snapshot the live game to user://savegame.json (F5).</summary>
+    public void SaveGame() => _saveLoad.Save();
 
-    /// <summary>Per-position most-common nucleotide across the spoken history
-    /// (the C14 LearnedDnaCounters snapshot; empty when nothing was spoken).</summary>
-    private List<int> BuildLearnedCounters()
-    {
-        var counters = new List<int>();
-        if (_spokenDna.Count == 0) return counters;
-        int len = 0;
-        foreach (var s in _spokenDna) len = System.Math.Max(len, s.Nucleotides.Length);
-        for (int i = 0; i < len; i++)
-        {
-            var tally = new int[4];
-            foreach (var s in _spokenDna)
-                if (i < s.Nucleotides.Length) tally[s.Nucleotides[i]]++;
-            int best = 0;
-            for (int n = 1; n < 4; n++) if (tally[n] > tally[best]) best = n;
-            counters.Add(best);
-        }
-        return counters;
-    }
-
+    /// <summary>Restore the saved state and re-enter the saved zone (F9).</summary>
     public void LoadGame()
     {
-        var loaded = SaveSystem.Load(new GodotSaveStore());
-        if (loaded == null) return;
-        _zone = loaded.ZoneId;
-        _companionCore.Loyalty = loaded.CompanionLoyalty;
-        _companionLoyaltyLast = loaded.CompanionLoyalty;
-        _hud.UpdateLife(_player.Health);
+        if (_saveLoad.Load())
+            _companionLoyaltyLast = _companionCore.Loyalty;   // no phantom loyalty delta after a restore
     }
 
     // ---- gate seams (design §4.2): one-line bool guards, no gameplay logic --
@@ -370,4 +388,7 @@ public partial class WorldDirector : Node3D
 
     /// <summary>Gate seam: block the DnaExtracted bus forward (no_dna negative control).</summary>
     public void SetDnaForwarding(bool enabled) => _dnaForwarding = enabled;
+
+    /// <summary>Gate seam: disable the interact/speak path (no_interact negative control).</summary>
+    public void SetInteractEnabled(bool enabled) => _interactEnabled = enabled;
 }

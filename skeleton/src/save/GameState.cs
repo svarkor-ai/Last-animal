@@ -40,6 +40,13 @@ public class GameState
     /// </summary>
     public List<int> LearnedDnaCounters { get; set; } = new();
 
+    /// <summary>
+    /// HUD DNA-meter event count at save time (MC 1344): how many
+    /// DnaExtracted/DnaSpoken events the meter had counted. Persisted so the
+    /// meter itself (not just the learned counters) survives a load.
+    /// </summary>
+    public int DnaEventCount { get; set; } = 0;
+
     /// <summary>Companion entity id (M03; -1 = no companion).</summary>
     public int CompanionEntityId { get; set; } = -1;
 
@@ -62,6 +69,7 @@ public class GameState
             ZoneId = "canyon",
             Progression = 3,
             LearnedDnaCounters = new List<int> { 0, 2, 1, 3 },
+            DnaEventCount = 12,
             CompanionEntityId = 7,
             CompanionLoyalty = 84,
             EmotionState = "Content"

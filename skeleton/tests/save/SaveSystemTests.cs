@@ -38,6 +38,7 @@ public class SaveSystemTests
         Assert.Equal(original.EmotionState, loaded.EmotionState);
         Assert.Equal(original.Version, loaded.Version);
         Assert.Equal(original.LearnedDnaCounters, loaded.LearnedDnaCounters);
+        Assert.Equal(original.DnaEventCount, loaded.DnaEventCount);
     }
 
     [Fact]

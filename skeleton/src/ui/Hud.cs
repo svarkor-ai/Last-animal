@@ -112,6 +112,18 @@ public partial class Hud : Control
         Redraw();
     }
 
+    /// <summary>
+    /// Save/load seam (MC 1344): set the DnaMeter readout directly and redraw,
+    /// mirroring UpdateLife/UpdateManna. LoadGame uses it to restore the meter
+    /// to the saved event count — the bus only ever increments, so a restore
+    /// cannot ride a DnaExtracted/DnaSpoken event. Clamped to [0,100].
+    /// </summary>
+    public void UpdateDnaMeter(int dnaMeter)
+    {
+        DnaMeter = Clamp(dnaMeter);
+        Redraw();
+    }
+
     private void OnDnaEvent(string signature)
     {
         DnaMeter = Mathf.Min(DnaMeter + 1, 100);

@@ -14,8 +14,9 @@
 #   - graphical-test-helper render bar at --wait 15 (positive mode holds the
 #     live scene after PASS so 15s lands on real scene content).
 #
-# Runs the proof 6x: positive (must PASS) + no_bus / no_spawn / no_controller /
-# no_dna / save_bad_version (each must FAIL with its marker) + save (must PASS).
+# Runs the proof 8x: positive (must PASS) + no_bus / no_spawn / no_controller /
+# no_dna / save_bad_version / no_interact (each must FAIL with its marker) +
+# save + dna_speak (must PASS).
 #
 # Usage:
 #   GODOT=/path/to/godot ./ci/runtime_integration_test.sh [project_dir]
@@ -89,6 +90,15 @@ LOGS="$(LA_GATE_MODE=save timeout 240 "$GODOT" --headless --path "$PROJ" --scrip
 
 # (D) schema guard: a future-version save must be rejected.
 run_mode save_bad_version fail "NEG_SAVE_VERSION"
+
+# (D2) DNA-speak + dialogue production path (MC 1344 DA findings C2/C4/C13):
+# interact near an NPC must fire DnaLanguage.Speak -> EventBus.DnaSpoken on the
+# REAL autoload bus AND open the DialogueSystem. The no_interact negative
+# control disables the director's interact seam and must go red.
+run_mode dna_speak pass "DNA_SPOKEN_EMITTED"
+LOGD="$(LA_GATE_MODE=dna_speak timeout 240 "$GODOT" --headless --path "$PROJ" --script "$PROOF" 2>&1)" || true
+[[ "$LOGD" == *'DIALOGUE_SHOWN'* ]] || fail "dna_speak: expected DIALOGUE_SHOWN"
+run_mode no_interact   fail "NEG_INTERACT"
 
 # (E) framebuffer render bar: the playable scene actually paints a non-blank frame.
 # --wait 15: the proof holds the live scene after PASS so 15s lands on real content.

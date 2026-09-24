@@ -44,8 +44,12 @@ public interface ISaveStore
 /// </summary>
 public static class SaveSystem
 {
-    /// <summary>Current schema version. Bump + add an upgrade path when fields change.</summary>
-    public const int CurrentVersion = 1;
+    /// <summary>
+    /// Current schema version. Bump + add an upgrade path when fields change.
+    /// v2 (MC 1344): added GameState.DnaEventCount — v1 saves are rejected by
+    /// the schema guard (logged upgrade path) rather than silently half-loaded.
+    /// </summary>
+    public const int CurrentVersion = 2;
 
     /// <summary>Name of the save file inside the store path.</summary>
     public const string SaveFileName = "savegame.json";

@@ -35,7 +35,15 @@ using System.Linq;
 //                    LOAD_RESTORED_DNA, LOAD_RESTORED_LOYALTY,
 //                    SAVE_ROUNDTRIP_PURE).
 //   save_bad_version — writes a save with Version = CurrentVersion + 1 and
-//                    asserts Load rejects it (NEG_SAVE_VERSION), exit non-zero.
+//                     asserts Load rejects it (NEG_SAVE_VERSION), exit non-zero.
+//   dna_speak       — after the follow stage the player is teleported next to
+//                     the companion and interact is pressed; the production
+//                     path interact -> DnaLanguage.Speak -> EventBus.DnaSpoken
+//                     -> DialogueSystem.Show must fire (DNA_SPOKEN_EMITTED,
+//                     DIALOGUE_SHOWN).
+//   no_interact     — the director's interact seam is disabled; interact is
+//                     pressed but no DnaSpoken fires and no dialogue opens
+//                     (NEG_INTERACT), exit non-zero.
 //
 // Run:  $GODOT --headless --path <proj> --script res://ci_proofs/RuntimeIntegrationProof.cs
 public partial class RuntimeIntegrationProof : SceneTree
@@ -60,6 +68,7 @@ public partial class RuntimeIntegrationProof : SceneTree
     private WorldDirector? _director;
     private CharacterBody3D? _playerBody;
     private Hud? _hud;
+    private DialogueSystem? _dialogue;
     private CompanionEntity? _companion;
     private readonly List<EnemyActor> _enemies = new();
 
@@ -72,14 +81,20 @@ public partial class RuntimeIntegrationProof : SceneTree
     private bool _failed;
     private bool _asserted;
     private int _dnaCount;
+    private int _dnaSpokenCount;
     private int _dnaBefore;
     private int _attackToggle;
+    private int _interactToggle;
     private Vector3 _playerStart;
     private Vector3 _companionStart;
     private float _followDist0;
     private int _kills;
     private int _loyaltyBeforeSave;
     private int _dnaMeterBeforeSave;
+    private int _spokenDnaBeforeSave;
+    private int _progressBeforeSave;
+    private int _dnaMutated;
+    private string _zoneBeforeSave = "";
 
     public override void _Initialize()
     {
@@ -115,12 +130,14 @@ public partial class RuntimeIntegrationProof : SceneTree
         _bus = Root.GetNodeOrNull<EventBus>("/root/EventBus");
         if (_bus == null) { Fail("EventBus autoload not present even after scene _Ready"); return; }
         _bus.DnaExtracted += _ => _dnaCount++;
+        _bus.DnaSpoken += _ => _dnaSpokenCount++;
 
         _director = main as WorldDirector;
         if (_director == null) { Fail("main.tscn root is not WorldDirector"); return; }
 
         _playerBody = main.GetNodeOrNull<CharacterBody3D>("Player");
         _hud = main.GetNodeOrNull<Hud>("UI/HudLayer/Hud");
+        _dialogue = main.GetNodeOrNull<DialogueSystem>("UI/Dialogue");
         _companion = main.GetNodeOrNull<CompanionEntity>("Companion/Entity");
         for (int i = 0; i < 8; i++)
         {
@@ -131,6 +148,8 @@ public partial class RuntimeIntegrationProof : SceneTree
         if (_playerBody == null) { Fail("Player node not found in main.tscn"); return; }
         if (_hud == null) { Fail("Hud not found at UI/HudLayer/Hud (WorldDirector UI not built)"); return; }
         if (_companion == null) { Fail("CompanionEntity not found at Main/Companion/Entity (director must spawn the machine-wired entity)"); return; }
+        if (_mode is "dna_speak" or "no_interact" && _dialogue == null)
+        { Fail("DialogueSystem not found at UI/Dialogue (WorldDirector UI not built)"); return; }
 
         if (_mode == "no_spawn")
         {
@@ -160,6 +179,10 @@ public partial class RuntimeIntegrationProof : SceneTree
         // no_dna: block the director's DnaExtracted forwarding so the kill
         // happens but the bus never hears it.
         if (_mode == "no_dna") _director.SetDnaForwarding(false);
+
+        // no_interact: disable the director's interact/speak seam so interact
+        // is pressed but neither DnaSpoken nor the dialogue may fire.
+        if (_mode == "no_interact") _director.SetInteractEnabled(false);
 
         // Capture the movement baseline BEFORE pressing the input (MC 1344.1):
         // stage 0 ran after the press, by which time the player had already moved.
@@ -306,7 +329,17 @@ public partial class RuntimeIntegrationProof : SceneTree
                           _hud.DnaMeter > _dnaBefore, $"dna={_hud.DnaMeter} (before {_dnaBefore})");
                     if (_failed) return true;
                     GD.Print("LA_GATE: DNA_EXTRACTED_EMITTED — kill via the REAL CombatSystem path -> EventBus.DnaExtracted -> Hud.DnaMeter");
-                    _stage = 3;
+                    if (_mode == "save")
+                    {
+                        // Save mode skips the HUD/companion stages: the kill
+                        // chain already produced the DNA>0 baseline the save
+                        // round-trip needs (MC 1344 non-vacuous gate).
+                        _stage = 20;
+                    }
+                    else
+                    {
+                        _stage = 3;
+                    }
                     _stageFrames = 0;
                 }
                 else if (_stageFrames > AttackBudgetFrames)
@@ -380,6 +413,16 @@ public partial class RuntimeIntegrationProof : SceneTree
             case 5:
                 if (_mode == "save") { _stage = 20; _stageFrames = 0; break; }
                 if (_mode == "save_bad_version") { _stage = 30; _stageFrames = 0; break; }
+                if (_mode is "dna_speak" or "no_interact")
+                {
+                    // DNA-speak stage: get the player next to the companion (the
+                    // NPC the interact path talks to), then press interact.
+                    _playerBody!.GlobalPosition = _companion.GlobalPosition;
+                    GD.Print($"LA_GATE: player teleported next to the companion at {_companion.GlobalPosition} — pressing interact");
+                    _stage = 40;
+                    _stageFrames = 0;
+                    break;
+                }
                 GD.Print("LA_GATE: PASS — authoritative runtime path verified (player->enemy->kill->DNA->HUD through ONE composition root)");
                 _asserted = true;
                 _stage = 6;
@@ -393,19 +436,81 @@ public partial class RuntimeIntegrationProof : SceneTree
                 if (_physFrames >= _holdStartPhys + HoldFrames) { Quit(0); return true; }
                 break;
 
+            // ---- dna_speak / no_interact: the interact -> Speak -> DnaSpoken
+            // -> DialogueSystem production path (MC 1344 DA findings C2/C4/C13).
+            case 40:
+                {
+                    if (_dnaSpokenCount > 0)
+                    {
+                        Input.ActionRelease("interact");
+                        if (_mode == "no_interact")
+                        {
+                            Fail("no_interact: DnaSpoken reached the bus despite the interact seam disabled — the negative control is broken");
+                            return true;
+                        }
+                        Check("DnaSpoken fired on the REAL EventBus from the interact path",
+                              _dnaSpokenCount > 0, $"spoken={_dnaSpokenCount}");
+                        if (_failed) return true;
+                        GD.Print("LA_GATE: DNA_SPOKEN_EMITTED — interact -> DnaLanguage.Speak -> EventBus.DnaSpoken (real autoload bus)");
+                        Check("DialogueSystem opened with a non-empty active node",
+                              _dialogue!.IsOpen && _dialogue.ActiveNode.Length > 0,
+                              $"node='{_dialogue.ActiveNode}'");
+                        if (_failed) return true;
+                        GD.Print("LA_GATE: DIALOGUE_SHOWN — DialogueSystem.Show rendered the spoken NPC's node");
+                        GD.Print("LA_GATE: PASS — DNA-speak + dialogue production path verified");
+                        _asserted = true;
+                        _stage = 6;
+                        _stageFrames = 0;
+                        _holdStartPhys = _physFrames;
+                        break;
+                    }
+                    if (_stageFrames > AttackBudgetFrames)
+                    {
+                        if (_mode == "no_interact")
+                        {
+                            // The seam is off: no DnaSpoken AND no dialogue is the
+                            // DETECTED break (the control must be able to fail).
+                            if (_dialogue!.IsOpen)
+                            {
+                                Fail("no_interact: dialogue opened despite the interact seam disabled — the negative control is broken");
+                                return true;
+                            }
+                            GD.Print("LA_GATE: NEG_INTERACT: interact pressed near the NPC but no DnaSpoken fired and no dialogue opened (seam disabled) — break detected");
+                            Quit(1);
+                            return true;
+                        }
+                        Fail("interact did not fire DnaSpoken within the budget (input -> director -> Speak -> bus path broken)");
+                        return true;
+                    }
+                    // Press interact 2 frames, release 2, repeat (attack-stage idiom).
+                    _interactToggle++;
+                    if (_interactToggle % 4 == 1) Input.ActionPress("interact");
+                    else if (_interactToggle % 4 == 3) Input.ActionRelease("interact");
+                }
+                break;
+
             // ---- save mode: round-trip through the REAL scene state ----
+            // MC 1344: the mode now runs the REAL kill chain first (stages 0-2),
+            // so the save happens with DnaMeter > 0 and the load asserts a
+            // CHANGED value round-trips. The old assert (meter unchanged while
+            // LoadGame never wrote the meter) was vacuous — green by construction.
             case 20:
                 {
-                    // Drain companion loyalty to a known value first: skip
-                    // salary cycles via the director's needs tick.
-                    _loyaltyBeforeSave = _director.Companion.Companion.Loyalty;
                     _dnaMeterBeforeSave = _hud.DnaMeter;
+                    _spokenDnaBeforeSave = _director.SpokenDna.Count;
+                    _loyaltyBeforeSave = _director.Companion.Companion.Loyalty;
+                    _zoneBeforeSave = _director.CurrentZone;
+                    _progressBeforeSave = _director.Progression;
+                    Check("SAVE_DNA_NONVACUOUS: DnaMeter > 0 at save time (a zero baseline would make the round-trip vacuous)",
+                          _dnaMeterBeforeSave > 0, $"dna={_dnaMeterBeforeSave}");
+                    if (_failed) return true;
                     _director.SaveGame();
                     var store = new GodotSaveStore();
                     Check("SAVE_WRITTEN: save file exists at the globalized user:// path",
                           System.IO.File.Exists(store.SavePath), $"path={store.SavePath}");
                     if (_failed) return true;
                     GD.Print("LA_GATE: SAVE_WRITTEN");
+                    TeleportIntoRange();   // line up the mutation kill (stage 21)
                     _stage = 21;
                     _stageFrames = 0;
                 }
@@ -413,16 +518,53 @@ public partial class RuntimeIntegrationProof : SceneTree
 
             case 21:
                 {
-                    // Mutate the live state away from the save, then load back.
-                    _director.Companion.Companion.ModifyLoyalty(-25);
+                    // Mutate the live state AWAY from the save through the REAL
+                    // path: a second kill bumps DnaMeter + _spokenDna past the
+                    // saved values; loyalty is drained directly.
+                    _attackToggle++;
+                    if (_attackToggle % 4 == 1) Input.ActionPress("attack");
+                    else if (_attackToggle % 4 == 3) Input.ActionRelease("attack");
+                    if (_hud.DnaMeter > _dnaMeterBeforeSave && _director.SpokenDna.Count > _spokenDnaBeforeSave)
+                    {
+                        Input.ActionRelease("attack");
+                        _dnaMutated = _hud.DnaMeter;
+                        _director.Companion.Companion.ModifyLoyalty(-25);
+                        Check("MUTATED_AWAY_FROM_SAVE: dna meter + spoken history moved past the saved values",
+                              _dnaMutated > _dnaMeterBeforeSave, $"dna={_dnaMutated} (saved {_dnaMeterBeforeSave})");
+                        if (_failed) return true;
+                        GD.Print("LA_GATE: MUTATED_AWAY_FROM_SAVE");
+                        _stage = 22;
+                        _stageFrames = 0;
+                    }
+                    else if (_stageFrames > AttackBudgetFrames)
+                    {
+                        Fail("save mode: mutation kill did not land within the attack budget");
+                    }
+                }
+                break;
+
+            case 22:
+                {
                     _director.LoadGame();
-                    Check("LOAD_RESTORED_DNA: DnaMeter restored to the saved value",
+                    Check("LOAD_RESTORED_DNA: DnaMeter restored to the SAVED value after being mutated",
                           _hud.DnaMeter == _dnaMeterBeforeSave,
-                          $"dna={_hud.DnaMeter} (saved {_dnaMeterBeforeSave})");
+                          $"dna={_hud.DnaMeter} (saved {_dnaMeterBeforeSave}, mutated {_dnaMutated})");
+                    if (_failed) return true;
+                    Check("LOAD_RESTORED_SPOKEN: spoken-DNA history restored to the saved snapshot",
+                          _director.SpokenDna.Count == _spokenDnaBeforeSave,
+                          $"spoken={_director.SpokenDna.Count} (saved {_spokenDnaBeforeSave})");
                     if (_failed) return true;
                     Check("LOAD_RESTORED_LOYALTY: companion loyalty restored to the saved value",
                           _director.Companion.Companion.Loyalty == _loyaltyBeforeSave,
                           $"loyalty={_director.Companion.Companion.Loyalty} (saved {_loyaltyBeforeSave})");
+                    if (_failed) return true;
+                    Check("LOAD_RESTORED_ZONE: director is back in the saved zone (re-entered, SpawnSet re-applied)",
+                          _director.CurrentZone == _zoneBeforeSave,
+                          $"zone={_director.CurrentZone} (saved {_zoneBeforeSave})");
+                    if (_failed) return true;
+                    Check("LOAD_RESTORED_PROGRESSION: progression restored from the save (no hardcoded zero)",
+                          _director.Progression == _progressBeforeSave,
+                          $"prog={_director.Progression} (saved {_progressBeforeSave})");
                     if (_failed) return true;
                     GD.Print("LA_GATE: LOAD_RESTORED_DNA + LOAD_RESTORED_LOYALTY");
                     // Pure round-trip anchor (regression): representative state.
@@ -489,6 +631,7 @@ public partial class RuntimeIntegrationProof : SceneTree
     {
         Input.ActionRelease("move_right");   // unconditional: never leak a pressed action
         Input.ActionRelease("attack");
+        Input.ActionRelease("interact");
         if (!_asserted && !_failed && _mode is "positive" or "save")
             GD.PrintErr("LA_GATE: FAIL — finished without asserting all stages");
     }
@@ -521,6 +664,7 @@ public partial class RuntimeIntegrationProof : SceneTree
     {
         Input.ActionRelease("move_right");
         Input.ActionRelease("attack");
+        Input.ActionRelease("interact");
         _failed = true;
         GD.PrintErr($"LA_GATE: FAIL — {why}");
         Quit(1);
