@@ -55,6 +55,7 @@
          CS0234 'LastAnimal.Save does not exist' build breaker (MC 1256.5). -->
     <Compile Include="src/save/GameState.cs" />
     <Compile Include="src/save/SaveSystem.cs" />
+    <Compile Include="src/save/ZoneProgression.cs" />
     <Compile Include="src/save/GodotSaveStore.cs" />
     <!-- Compile M06 audio files (autoload + test script). -->
     <Compile Include="autoload/MusicManager.cs" />
