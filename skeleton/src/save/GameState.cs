@@ -47,6 +47,14 @@ public class GameState
     /// </summary>
     public int DnaEventCount { get; set; } = 0;
 
+    /// <summary>
+    /// Player health at save time (MC 1348 N1). Persisted so the F9 load path
+    /// can rescue a dead player: the restored value clears the model's
+    /// IsDead and movement works again. Old saves without the field
+    /// deserialize at the 100 default (a generous restore, not a softlock).
+    /// </summary>
+    public int PlayerHealth { get; set; } = 100;
+
     /// <summary>Companion entity id (M03; -1 = no companion).</summary>
     public int CompanionEntityId { get; set; } = -1;
 
@@ -72,6 +80,7 @@ public class GameState
             DnaEventCount = 12,
             CompanionEntityId = 7,
             CompanionLoyalty = 84,
+            PlayerHealth = 100,
             EmotionState = "Content"
         };
     }

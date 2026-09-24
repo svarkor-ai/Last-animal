@@ -34,11 +34,13 @@
          engine project only. -->
     <Compile Include="../../src/save/GameState.cs" />
     <Compile Include="../../src/save/SaveSystem.cs" />
+    <Compile Include="../../src/save/ZoneProgression.cs" />
     <!-- The test files themselves (EnableDefaultCompileItems=false, so they
          must be listed). The harness self-test is compiled conditionally so
          the gate script can drop it with /p:IncludeHarness=false (two-sided
          calibration, same pattern as ci/combat_test.sh). -->
     <Compile Include="SaveSystemTests.cs" />
+    <Compile Include="ZoneProgressionTests.cs" />
     <Compile Include="SaveHarnessSelfTest.cs" Condition=" '$(IncludeHarness)' != 'false' " />
   </ItemGroup>
 

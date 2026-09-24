@@ -39,6 +39,7 @@ public class SaveSystemTests
         Assert.Equal(original.Version, loaded.Version);
         Assert.Equal(original.LearnedDnaCounters, loaded.LearnedDnaCounters);
         Assert.Equal(original.DnaEventCount, loaded.DnaEventCount);
+        Assert.Equal(original.PlayerHealth, loaded.PlayerHealth);
     }
 
     [Fact]
@@ -84,6 +85,21 @@ public class SaveSystemTests
         Assert.Equal(12, loaded.CompanionLoyalty);
         Assert.Equal(5, loaded.Progression);
         Assert.Equal("ruins", loaded.ZoneId);
+    }
+
+    [Fact]
+    public void RoundTrip_PreservesPlayerHealth()
+    {
+        // MC 1348 N1: the save must capture player health so a load rescues a
+        // dead player (F9 from the death state restores a live HP value).
+        var store = NewStore();
+        var original = GameState.Representative();
+        original.PlayerHealth = 42;
+
+        Assert.True(SaveSystem.Save(original, store));
+        var loaded = SaveSystem.Load(store);
+        Assert.NotNull(loaded);
+        Assert.Equal(42, loaded.PlayerHealth);
     }
 
     // ------------------------------------------------------------------
