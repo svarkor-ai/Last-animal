@@ -63,6 +63,12 @@ public partial class Player : CharacterBody3D
         Vector2 dir = raw;
         if (dir.LengthSquared() > 1f) dir = dir.Normalized(); // clamp diagonal to avoid sqrt(2) speed-up
 
+        // Dead players cannot move (MC 1348 N1): the model's Move() already
+        // refuses input when IsDead, but this shell used to apply the input
+        // velocity unconditionally — a dead player kept walking. Zero the
+        // planar input; gravity still applies so the body stays grounded.
+        if (Controller.IsDead) dir = Vector2.Zero;
+
         // --- CharacterBody3D velocity: gravity (Y) + controller speed (XZ) ---
         Vector3 vel = Velocity;
         vel.Y -= Gravity * dt;             // fall onto / stand on the terrain
