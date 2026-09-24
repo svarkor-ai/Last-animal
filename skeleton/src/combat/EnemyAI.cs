@@ -38,9 +38,9 @@ public class EnemyAI
     public Type EnemyType { get; }
     public State CurrentState { get; private set; }
     public int Health { get; private set; }
-    public int MaxHealth { get; }
-    public int Damage { get; }
-    public float Speed { get; }
+    public int MaxHealth { get; private set; }
+    public int Damage { get; private set; }
+    public float Speed { get; private set; }
     public float AttackRange { get; }
     public float ChaseRange { get; }
     public int EntityId { get; }
@@ -75,6 +75,18 @@ public class EnemyAI
 
         CurrentState = State.Patrol;
         GeneratePatrolTarget();
+    }
+
+    /// <summary>
+    /// Apply an ecosystem SpawnSet's scaled stats (C15 wire, MC 1344): replace
+    /// the hardcoded per-type defaults with the adapted table the spawner
+    /// produced, so adaptation has a live effect on the spawned enemy.
+    /// </summary>
+    public void ApplySpawnStats(int health, int damage, float speed)
+    {
+        Health = MaxHealth = health;
+        Damage = damage;
+        Speed = speed;
     }
 
     /// <summary>

@@ -229,6 +229,27 @@ public class EcosystemSpawnerTests
         Assert.Equal(sp.EntityId, extracted!.Id);
     }
 
+    [Fact]
+    public void SpawnedStats_AppliedToEnemyAI_OverrideTypeDefaults()
+    {
+        // MC 1344 DA finding 4: ApplySpawnSet constructed EnemyAI from Type
+        // only, DISCARDING the SpawnSet's scaled Health/Damage/Speed. The
+        // wire under test: EnemyAI.ApplySpawnStats must replace the
+        // hardcoded per-type defaults with the adapted table's values.
+        var spawner = new EcosystemSpawner(seed: 3);
+        var set = spawner.OnZoneEnter("canyon", NewProfile(observed: 6));
+        var sp = set.Enemies[0];
+        var ai = new EnemyAI(sp.Position, sp.EntityId, sp.Type, seed: sp.EntityId);
+        Assert.NotEqual(sp.Health, ai.Health);   // type default != adapted value
+
+        ai.ApplySpawnStats(sp.Health, sp.Damage, sp.Speed);
+
+        Assert.Equal(sp.Health, ai.Health);
+        Assert.Equal(sp.Health, ai.MaxHealth);
+        Assert.Equal(sp.Damage, ai.Damage);
+        Assert.Equal(sp.Speed, ai.Speed);
+    }
+
     // =====================================================================
     // Helpers
     // =====================================================================
