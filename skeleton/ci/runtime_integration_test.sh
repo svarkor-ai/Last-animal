@@ -49,11 +49,11 @@ echo "RUNTIME_INTEGRATION_TEST: project=$PROJ  godot=$("$GODOT" --version 2>/dev
 timeout 300 "$GODOT" --headless --path "$PROJ" --build-solutions --quit-after 1 \
   || fail "engine --build-solutions exited nonzero (C# build failed)"
 
-run_mode() {  # run_mode <mode> <expect: pass|fail> <marker>
-  local mode="$1" expect="$2" marker="$3"
+run_mode() {  # run_mode <mode> <expect: pass|fail> <marker> [proof-res-path]
+  local mode="$1" expect="$2" marker="$3" proof="${4:-$PROOF}"
   echo "RUNTIME_INTEGRATION_TEST: mode=$mode (expect $expect)"
   local log code
-  log="$(LA_GATE_MODE="$mode" timeout 240 "$GODOT" --headless --path "$PROJ" --script "$PROOF" 2>&1)"
+  log="$(LA_GATE_MODE="$mode" timeout 240 "$GODOT" --headless --path "$PROJ" --script "$proof" 2>&1)"
   code=$?
   printf '%s\n' "$log"
   if [ "$expect" = pass ]; then
@@ -109,5 +109,19 @@ printf '%s\n' "$LOGC"
 [[ "$LOGC" == *'RESULT=PASS'* ]] \
   || fail "expected 'RESULT=PASS' from graphical-test-helper (framebuffer blank/uniform)"
 
-echo "RUNTIME_INTEGRATION_TEST: GATE PASS — authoritative runtime path verified (positive green; no_bus/no_spawn/no_controller/no_dna/save_bad_version all red with named markers; save round-trip green; non-blank render)"
+# (F) zone travel + boss phase (MC 1344 DA findings 3+4, C15): canyon/ruins
+# reachable in play via the travel action, SpawnSet scaled stats live on the
+# spawned AI, boss reachable and BossController.Phase firing EcosystemAdapted.
+PROOF_ZB="res://ci_proofs/ZoneBossProof.cs"
+[ -f "$PROJ/ci_proofs/ZoneBossProof.cs" ] || fail "ZoneBossProof.cs not found"
+run_mode zone_travel pass "ZONE_TRAVEL_CANYON" "$PROOF_ZB"
+LOGZ="$(LA_GATE_MODE=zone_travel timeout 240 "$GODOT" --headless --path "$PROJ" --script "$PROOF_ZB" 2>&1)" || true
+[[ "$LOGZ" == *'ZONE_TRAVEL_CANYON'* ]] || fail "zone_travel: expected ZONE_TRAVEL_CANYON"
+[[ "$LOGZ" == *'ZONE_TRAVEL_RUINS'* ]] || fail "zone_travel: expected ZONE_TRAVEL_RUINS"
+[[ "$LOGZ" == *'SCALED_STATS_APPLIED'* ]] || fail "zone_travel: expected SCALED_STATS_APPLIED"
+run_mode boss_phase pass "BOSS_PHASE_FIRED" "$PROOF_ZB"
+LOGB="$(LA_GATE_MODE=boss_phase timeout 240 "$GODOT" --headless --path "$PROJ" --script "$PROOF_ZB" 2>&1)" || true
+[[ "$LOGB" == *'BOSS_REACHED'* ]] || fail "boss_phase: expected BOSS_REACHED"
+
+echo "RUNTIME_INTEGRATION_TEST: GATE PASS — authoritative runtime path verified (positive green; no_bus/no_spawn/no_controller/no_dna/save_bad_version all red with named markers; save round-trip green; zone travel + boss phase green; non-blank render)"
 exit 0
