@@ -33,10 +33,10 @@ using System;
 // save/load is NOT wired into the playable scene (W6 wired pure logic only); this card
 // adds no scene wiring.
 //
-// After PASS the proof HOLDS the live scene (~10s of frames, only reached with a
-// display) so graphical-test-helper can capture a non-blank frame of the real scene
-// at --wait 15 (8-9s catches only the engine splash). Headless frames run uncapped,
-// so the hold is near-instant there.
+// After PASS the proof HOLDS the live scene (1200 physics ticks = ~20s, only
+// reached with a display) so graphical-test-helper can capture a non-blank frame
+// of the real scene at --wait 15 (8-9s catches only the engine splash). Headless
+// frames run uncapped, so the hold is near-instant there.
 //
 // Run:  $GODOT --headless --path <proj> --script res://ci_proofs/BridgeMvpProof.cs
 public partial class BridgeMvpProof : SceneTree
@@ -44,7 +44,8 @@ public partial class BridgeMvpProof : SceneTree
     private const int MovePhysicsFrames = 30;  // WASD accumulation in PHYSICS ticks (0.5s @ 60Hz) before the move assert (headless uncapped frames are tiny; 12 gave dx=0.031 < 0.05, MC 1256.14)
     private const int AttackBudgetFrames = 60; // input-path kill budget before seam fallback
     private const int FollowFrames = 120;      // frames the companion gets to close distance (headless uncapped frames are tiny; 40 gave moved<0.2, MC 1256.14)
-    private const int HoldFrames = 600;        // post-PASS hold for the graphical capture
+    private const int HoldFrames = 1200;       // post-PASS hold: 1200 physics ticks @60Hz = 20s
+                                               // > the helper's 15s capture window (MC 1344.2)
     private const int FrameBudget = 2400;      // hard overall budget (raised: MoveFrames 60 + FollowFrames 120 + attack budget need headroom, MC 1256.14)
 
     private EventBus? _bus;
@@ -71,6 +72,7 @@ public partial class BridgeMvpProof : SceneTree
     private int _attackToggle;
     private int _physFrames;    // physics ticks elapsed since compose (movement is physics-driven)
     private int _pressPhysFrame; // physics tick at which move_right was pressed (MC 1344.1)
+    private int _holdStartPhys;  // physics tick when the render-bar hold began (MC 1344.2)
     // (loyalty, hearts) pairs recorded from every LoyaltyChanged event (MC 1344.1 marker-3).
     private readonly List<(int loy, int hearts)> _loyaltyPairs = new();
     private int _loyaltyPending; // loyalty of the emit currently in flight (MC 1344.1)
@@ -356,13 +358,16 @@ public partial class BridgeMvpProof : SceneTree
                     _asserted = true;
                     _stage = 6;
                     _stageFrames = 0;
+                    _holdStartPhys = _physFrames;
                 }
                 break;
 
             case 6:
                 // Hold the live scene so graphical-test-helper (--wait 15) captures a
-                // real rendered frame, not the splash.
-                if (_stageFrames >= HoldFrames) { Quit(0); return true; }
+                // real rendered frame, not the splash. Physics-tick gated like
+                // RuntimeIntegrationProof: process frames raced the 15s grab — the
+                // proof quit first and the root window read uniform black (MC 1344.2).
+                if (_physFrames >= _holdStartPhys + HoldFrames) { Quit(0); return true; }
                 break;
         }
         return false;
