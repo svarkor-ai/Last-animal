@@ -1,6 +1,7 @@
 using Godot;
 using LastAnimal.Combat;
 using LastAnimal.Core;
+using LastAnimal.Save;
 using LastAnimal.World;
 using System.Collections.Generic;
 
@@ -19,6 +20,12 @@ using System.Collections.Generic;
 //     BossThreshold(4) a travel into canyon (BossTier 1) must field a live
 //     boss (BOSS_REACHED), and further kills must step BossController.Phase
 //     and fire C2 EcosystemAdapted on the REAL autoload bus (BOSS_PHASE_FIRED).
+//
+//   death_load — MC 1348 N1: save while alive (F5 path), kill the player
+//     through the model, assert the SHELL stops moving (dead = no input
+//     movement), then LoadGame() (F9 path) must restore health, clear IsDead
+//     and make movement work again. Markers: DEATH_MOVEMENT_STOPPED,
+//     DEATH_LOAD_RESURRECTED, DEATH_MOVEMENT_RESTORED.
 //
 // Run:  $GODOT --headless --path <proj> --script res://ci_proofs/ZoneBossProof.cs
 public partial class ZoneBossProof : SceneTree
@@ -41,6 +48,9 @@ public partial class ZoneBossProof : SceneTree
     private int _stageFrames;
     private bool _failed;
     private bool _asserted;
+    private int _healthBeforeSave;
+    private Vector3 _deadPos;
+    private int _moveToggle;
 
     public override void _Initialize()
     {
@@ -80,7 +90,10 @@ public partial class ZoneBossProof : SceneTree
 
         switch (_stage)
         {
-            case 0: _stage = _mode == "boss_phase" ? 20 : 10; _stageFrames = 0; break;
+            case 0:
+                _stage = _mode == "boss_phase" ? 20 : (_mode == "death_load" ? 30 : 10);
+                _stageFrames = 0;
+                break;
 
             // ---- zone_travel: first travel must land in canyon -------------
             case 10:
@@ -164,8 +177,89 @@ public partial class ZoneBossProof : SceneTree
                     Fail($"no EcosystemAdapted after observed={_director.SpokenDna.Count} (phase wire broken)");
                 else KillLoop();
                 break;
+
+            // ---- death_load: save alive, kill, shell must stop, load rescues
+            case 30:
+                {
+                    _healthBeforeSave = _director!.PlayerModel.Health;
+                    _director.SaveGame();
+                    var store = new GodotSaveStore();
+                    Check("DEATH_SAVE_WRITTEN: save file exists at the globalized user:// path",
+                          System.IO.File.Exists(store.SavePath), $"path={store.SavePath}");
+                    if (_failed) return true;
+                    // Kill through the model (the only damage entry point).
+                    _director.PlayerModel.TakeDamage(_healthBeforeSave);
+                    Check("player dead after lethal damage", _director.PlayerModel.IsDead,
+                          $"health={_director.PlayerModel.Health}");
+                    if (_failed) return true;
+                    _deadPos = _playerBody!.GlobalPosition;
+                    _stage = 31;
+                    _stageFrames = 0;
+                }
+                break;
+
+            case 31:
+                // Hold move_right while dead: the shell must not translate.
+                Input.ActionPress("move_right");
+                if (_stageFrames >= 30)
+                {
+                    Input.ActionRelease("move_right");
+                    Check("DEATH_MOVEMENT_STOPPED: dead player body does not translate under held input",
+                          XzDist(_playerBody!.GlobalPosition, _deadPos) < 0.05f,
+                          $"moved={XzDist(_playerBody.GlobalPosition, _deadPos):0.###}");
+                    if (_failed) return true;
+                    GD.Print("LA_GATE: DEATH_MOVEMENT_STOPPED");
+                    _stage = 32;
+                    _stageFrames = 0;
+                }
+                break;
+
+            case 32:
+                {
+                    // F9 from the death state: health restored, IsDead cleared.
+                    // Spawning is gated off first so the re-fielded enemy ring
+                    // cannot interfere with the movement window below (the
+                    // death assertions themselves do not involve enemies).
+                    _director!.SetSpawningEnabled(false);
+                    _director.LoadGame();
+                    Check("DEATH_LOAD_RESURRECTED: load restores saved health and clears IsDead",
+                          !_director.PlayerModel.IsDead && _director.PlayerModel.Health == _healthBeforeSave,
+                          $"health={_director.PlayerModel.Health} (saved {_healthBeforeSave})");
+                    if (_failed) return true;
+                    GD.Print("LA_GATE: DEATH_LOAD_RESURRECTED");
+                    _deadPos = _playerBody!.GlobalPosition;
+                    _stage = 33;
+                    _stageFrames = 0;
+                }
+                break;
+
+            case 33:
+                Input.ActionPress("move_right");
+                if (_stageFrames >= 30)
+                {
+                    Input.ActionRelease("move_right");
+                    float moved = XzDist(_playerBody!.GlobalPosition, _deadPos);
+                    Check("DEATH_MOVEMENT_RESTORED: revived player body translates under held input",
+                          moved > 0.5f && !_director!.PlayerModel.IsDead,
+                          $"moved={moved:0.###} health={_director!.PlayerModel.Health}");
+                    if (_failed) return true;
+                    GD.Print("LA_GATE: DEATH_MOVEMENT_RESTORED");
+                    GD.Print("LA_GATE: PASS — death recovery verified (dead stops, load resurrects, movement works)");
+                    _asserted = true;
+                    Quit(0);
+                    return true;
+                }
+                break;
         }
         return false;
+    }
+
+    /// <summary>Planar (XZ) distance — gravity jitter on Y must not count as
+    /// input movement in the death-path checks.</summary>
+    private static float XzDist(Vector3 a, Vector3 b)
+    {
+        b.Y = a.Y;
+        return a.DistanceTo(b);
     }
 
     /// <summary>Press travel for one frame out of PressFrames (just-pressed idiom).
@@ -256,6 +350,7 @@ public partial class ZoneBossProof : SceneTree
     {
         Input.ActionRelease("travel");
         Input.ActionRelease("attack");
+        Input.ActionRelease("move_right");
         if (!_asserted && !_failed)
             GD.PrintErr("LA_GATE: FAIL — finished without asserting all stages");
     }
