@@ -30,8 +30,10 @@ fail() { echo "COMPANION_TEST: GATE FAIL: $*" >&2; exit 1; }
 echo "COMPANION_TEST: project=$PROJ"
 
 # (1) Run WITH the harness self-test present. Expected: 1 failure.
+# No --no-restore: it silently no-ops (exit 0, no output) on a never-restored
+# clean clone, so the self-test check would read nothing (MC 1344.2).
 echo "COMPANION_TEST: run 1 — with harness self-test (expect 1 failure)"
-LOG1="$(cd "$PROJ" && dotnet test "$CSPROJ" --no-restore 2>&1)"
+LOG1="$(cd "$PROJ" && dotnet test "$CSPROJ" 2>&1)"
 CODE1=$?
 printf '%s\n' "$LOG1"
 
@@ -48,7 +50,7 @@ echo "COMPANION_TEST: run 1 — Failed=$FAILED1 Passed=$PASSED1 Total=$TOTAL1"
 # (2) Run WITHOUT the harness self-test. Expected: 0 failures.
 echo "COMPANION_TEST: run 2 — without harness self-test (expect 0 failures)"
 mv "$SELFTEST" "$SELFTEST.bak"
-LOG2="$(cd "$PROJ" && dotnet test "$CSPROJ" --no-restore 2>&1)"
+LOG2="$(cd "$PROJ" && dotnet test "$CSPROJ" 2>&1)"
 CODE2=$?
 mv "$SELFTEST.bak" "$SELFTEST"
 printf '%s\n' "$LOG2"

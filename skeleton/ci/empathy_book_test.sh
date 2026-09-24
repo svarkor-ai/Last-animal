@@ -43,7 +43,9 @@ echo "M04_EMPATHY_BOOK: project=$PROJ  godot=$("$GODOT" --version 2>/dev/null | 
 # (A) Standalone xunit suite — two-sided calibration
 # ---------------------------------------------------------------------------
 echo "M04_EMPATHY_BOOK: run A1 — with harness self-test (expect 1 failure)"
-LOG1="$(cd "$PROJ" && dotnet test "$EMPATHY_DIR/$PROJCS" --no-restore 2>&1)"
+# No --no-restore: it silently no-ops (exit 0, no output) on a never-restored
+# clean clone, so the self-test check would read nothing (MC 1344.2).
+LOG1="$(cd "$PROJ" && dotnet test "$EMPATHY_DIR/$PROJCS" 2>&1)"
 CODE1=$?
 printf '%s\n' "$LOG1"
 [ "$CODE1" -ne 0 ] || fail "A1: expected non-zero exit (harness self-test should fail), got 0"
@@ -58,7 +60,7 @@ echo "M04_EMPATHY_BOOK: run A1 — Failed=$FAILED1 Passed=$PASSED1 Total=$TOTAL1
 
 echo "M04_EMPATHY_BOOK: run A2 — without harness self-test (expect 0 failures)"
 mv "$SELFTEST" "$SELFTEST.bak"
-LOG2="$(cd "$PROJ" && dotnet test "$EMPATHY_DIR/$PROJCS" --no-restore 2>&1)"
+LOG2="$(cd "$PROJ" && dotnet test "$EMPATHY_DIR/$PROJCS" 2>&1)"
 CODE2=$?
 mv "$SELFTEST.bak" "$SELFTEST"
 printf '%s\n' "$LOG2"

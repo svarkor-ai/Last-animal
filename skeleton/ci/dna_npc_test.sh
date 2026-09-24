@@ -33,7 +33,9 @@ echo "DNA_NPC_TEST: project=$PROJ"
 # (1) Run WITH the harness self-test present.
 #     Expected: exactly 1 failure (the deliberately-broken test), all others green.
 echo "DNA_NPC_TEST: run 1 — with harness self-test (expect 1 failure)"
-LOG1="$(cd "$PROJ" && dotnet test "$TESTS_DIR/LastAnimalDnaNpcTests.csproj" --no-restore 2>&1)"
+# No --no-restore: it silently no-ops (exit 0, no output) on a never-restored
+# clean clone, so the self-test check would read nothing (MC 1344.2).
+LOG1="$(cd "$PROJ" && dotnet test "$TESTS_DIR/LastAnimalDnaNpcTests.csproj" 2>&1)"
 CODE1=$?
 printf '%s\n' "$LOG1"
 
@@ -58,7 +60,7 @@ echo "DNA_NPC_TEST: run 1 — Failed=$FAILED1 Passed=$PASSED1 Total=$TOTAL1"
 #     (MC 890.17: converted from file-move to the conditional-property form
 #     so no gate has to mutate shared test files mid-run).
 echo "DNA_NPC_TEST: run 2 — without harness self-test (expect 0 failures)"
-LOG2="$(cd "$PROJ" && dotnet test "$TESTS_DIR/LastAnimalDnaNpcTests.csproj" --no-restore -p:IncludeHarness=false 2>&1)"
+LOG2="$(cd "$PROJ" && dotnet test "$TESTS_DIR/LastAnimalDnaNpcTests.csproj" -p:IncludeHarness=false 2>&1)"
 CODE2=$?
 printf '%s\n' "$LOG2"
 
