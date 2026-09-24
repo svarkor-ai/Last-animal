@@ -7,6 +7,7 @@ using LastAnimal.Dna;
 using LastAnimal.Ecosystem;
 using LastAnimal.Npc;
 using LastAnimal.Ui;
+using System;
 using System.Collections.Generic;
 
 // Last Animal — W3-fix composition (MC 1123.10, artemis, 2026-09-08).
@@ -59,9 +60,13 @@ public partial class WorldDirector : Node3D
 
     private readonly List<LanguageSignature> _spokenDna = new();
     private readonly List<EnemyActor> _enemies = new();
+    private readonly List<EnemyActor> _zoneEnemies = new();
     private CompanionFollowBody? _companionBody;
     private int _companionLoyaltyLast;
     private string _zone = EcosystemSpawner.DefaultZone;
+    private Vector3 _spawnOrigin;
+    private EnemyActor? _boss;
+    private BossPhaseState _bossPhase;
 
     // Gate seams (design §4.2): one-line bool guards, default true, no gameplay behavior.
     private bool _spawningEnabled = true;
@@ -96,6 +101,10 @@ public partial class WorldDirector : Node3D
     public CompanionStateMachine Companion => _companion;
     public string CurrentZone => _zone;
     public int Progression => _saveLoad.Progression;
+    public bool HasLiveBoss => _boss != null && !_boss.IsDead;
+    public EnemyActor? BossActor => _boss;
+    public int BossPhase => _bossPhase.Phase;
+    public IReadOnlyList<EnemyActor> Enemies => _enemies;
 
     public override void _Ready()
     {
@@ -116,6 +125,7 @@ public partial class WorldDirector : Node3D
 
         // --- construct the ONE instance of each gameplay system --------------
         Vector3 origin = Player?.GlobalPosition ?? Vector3.Zero;
+        _spawnOrigin = origin;
         _player = new PlayerController(new CombatVec3(origin.X, 0f, origin.Z));
         _combat = new CombatSystem();
         _ecosystem = new EcosystemSpawner(seed: 7);
@@ -197,6 +207,8 @@ public partial class WorldDirector : Node3D
             TryAttack();
         if (Input.IsActionJustPressed("interact"))
             TryInteract();
+        if (Input.IsActionJustPressed("travel"))
+            TravelToNextZone();
         if (Input.IsActionJustPressed("save_game"))
             _saveLoad.Save();
         if (Input.IsActionJustPressed("load_game"))
@@ -253,7 +265,10 @@ public partial class WorldDirector : Node3D
     }
 
     /// <summary>Apply a SpawnSet: spawn an EnemyActor per entry (the design's
-    /// "SpawnSet APPLIED — enemies spawned from it, not discarded").</summary>
+    /// "SpawnSet APPLIED — enemies spawned from it, not discarded"). The set's
+    /// scaled Health/Damage/Speed and IsBoss flag are passed INTO the spawned
+    /// enemy (MC 1344 DA finding 4: they were discarded before, making the
+    /// adaptation cosmetic).</summary>
     private void ApplySpawnSet(SpawnSet set)
     {
         if (!_spawningEnabled) return;
@@ -263,12 +278,57 @@ public partial class WorldDirector : Node3D
             var ai = new EnemyAI(
                 new CombatVec3(origin.X + spawned.Position.X, 0f, origin.Z + spawned.Position.Z),
                 spawned.EntityId, spawned.Type, seed: spawned.EntityId);
+            // C15 live adaptation: the SpawnSet's scaled stats override the
+            // per-type defaults; the boss's phase adds its hard-counter tier.
+            int health = spawned.Health;
+            int damage = spawned.Damage;
+            if (spawned.IsBoss)
+            {
+                _bossPhase = BossController.Phase(BossController.Initial,
+                    EcosystemAdaptation.ModelPlayerDna(_spokenDna));
+                float mult = BossController.CounterMultiplier(_bossPhase.Phase);
+                health = (int)Math.Round(health * mult);
+                damage = (int)Math.Round(damage * mult);
+            }
+            ai.ApplySpawnStats(health, damage, spawned.Speed);
             var actor = new EnemyActor { Name = $"Spawned{spawned.EntityId}" };
             actor.Configure(ai, origin.X + spawned.Position.X, origin.Z + spawned.Position.Z,
                 new Color(0.9f, 0.25f, 0.2f));
             AddChild(actor);
             _enemies.Add(actor);
+            _zoneEnemies.Add(actor);
+            if (spawned.IsBoss) _boss = actor;
         }
+    }
+
+    /// <summary>Despawn the previous zone's SpawnSet enemies before re-fielding
+    /// (zone travel and save-load re-entry must not stack duplicate sets).</summary>
+    private void ClearZoneEnemies()
+    {
+        foreach (var e in _zoneEnemies)
+        {
+            _enemies.Remove(e);
+            e.QueueFree();
+        }
+        _zoneEnemies.Clear();
+        _boss = null;
+    }
+
+    // Zone travel (MC 1344 DA finding 3): canyon/ruins were unreachable —
+    // EnterZone fired only once at boot. The travel action (input map, same
+    // mechanism as attack/interact) cycles the ordered zone list, despawns the
+    // previous zone's set, repositions the player at the zone entry and
+    // re-enters (EnterZone -> OnZoneEntered -> ApplySpawnSet).
+    private void TravelToNextZone()
+    {
+        if (Player == null) return;
+        var zones = EcosystemSpawner.ZoneIds;
+        int idx = System.Array.IndexOf(zones, _zone);
+        string next = zones[(idx + 1) % zones.Length];
+        ClearZoneEnemies();
+        Player.GlobalPosition = _spawnOrigin;
+        EnterZone(next);
+        GD.Print($"W3: travel -> zone '{next}' (player repositioned, SpawnSet re-applied)");
     }
 
     private void SpawnCompanion()
@@ -346,19 +406,31 @@ public partial class WorldDirector : Node3D
     }
 
     // C10 -> M02 -> C2: an OnKill extraction appends to the spoken history and
-    // forwards to the EventBus. This is the ONLY writer of _spokenDna.
+    // forwards to the EventBus. This is the ONLY writer of _spokenDna. When a
+    // live boss observes enough new history, BossController.Phase steps up and
+    // the transition fires C2 EcosystemAdapted + re-fields a meaner SpawnSet.
     private void OnDnaExtracted(LanguageSignature signature)
     {
         _spokenDna.Add(signature);
         if (!_dnaForwarding) return;   // gate seam (design §4.2)
         _bus.EmitDnaExtracted(new DnaSignature(signature.SpeciesHash, signature.Id.ToString()));
+
+        if (_boss == null || _boss.IsDead) return;
+        var next = BossController.Phase(_bossPhase, EcosystemAdaptation.ModelPlayerDna(_spokenDna));
+        if (!next.Changed) return;
+        _bossPhase = next;
+        _bus.EmitEcosystemAdapted(new MutationId($"boss_phase_{next.Phase}"));
+        EnterZone(_zone);
+        GD.Print($"W3: boss phase -> {next.Phase} (EcosystemAdapted emitted, SpawnSet re-applied)");
     }
 
     // C15: (re)populate the current zone's SpawnSet when the player enters it.
+    // The previous zone's set is despawned first so re-entry never stacks.
     private void OnZoneEntered(string zoneId, SpawnSet set)
     {
         _zone = zoneId;
         _saveLoad.OnZoneEntered(zoneId);
+        ClearZoneEnemies();
         ApplySpawnSet(set);
         GD.Print($"W3: zone '{zoneId}' SpawnSet applied (enemies={set.Count}, adaptation={set.AdaptationLevel:0.##})");
     }

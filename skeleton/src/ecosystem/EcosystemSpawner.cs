@@ -109,6 +109,10 @@ public class EcosystemSpawner
     /// <summary>The canonical zone id an unknown zone falls back to.</summary>
     public static readonly string DefaultZone = "meadow";
 
+    /// <summary>Ordered zone ids (shallowest -> deepest) — the travel path the
+    /// WorldDirector cycles through so canyon and ruins are reachable in play.</summary>
+    public static readonly string[] ZoneIds = { "meadow", "canyon", "ruins" };
+
     private readonly System.Random _rng;
     private int _nextEntityId = 1000;
 

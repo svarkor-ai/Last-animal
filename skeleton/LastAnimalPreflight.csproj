@@ -48,6 +48,7 @@
     <Compile Include="src/combat/PlayerController.cs" />
     <!-- Compile M12 boss-ecosystem-adaptation (C15, pure logic). -->
     <Compile Include="src/ecosystem/EcosystemSpawner.cs" />
+    <Compile Include="src/ecosystem/BossController.cs" />
     <!-- Compile M11 save-progression (C14): pure logic + the GodotSaveStore
          user:// seam (needs GodotSharp — engine project only). Required by
          ci_proofs/BridgeMvpProof.cs (marker 6 SAVE_ROUNDTRIP); fixes the
@@ -75,6 +76,7 @@
     <Compile Include="ci_proofs/MainCompositionProof.cs" />
     <Compile Include="ci_proofs/BridgeMvpProof.cs" />
     <Compile Include="ci_proofs/RuntimeIntegrationProof.cs" />
+    <Compile Include="ci_proofs/ZoneBossProof.cs" />
     <Compile Include="tests/BootTest.cs" />
     <Compile Include="tests/EmpathySignalTest.cs" />
     <Compile Include="tests/companion/CompanionRenderTest.cs" />
