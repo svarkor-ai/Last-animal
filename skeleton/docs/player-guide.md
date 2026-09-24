@@ -13,13 +13,18 @@ Verified against the `[input]` map in `project.godot`:
 | Move | `W`/`A`/`S`/`D` or arrow keys |
 | Attack | `Space` or left mouse button |
 | Interact | `E` |
+| Travel to next zone | `T` |
+| Save game | `F5` |
+| Load game | `F9` |
 
 ## The HUD
 
 Four readouts (C13 contract, `src/ui/Hud.cs`): **Life**, **Manna**, **DNA
-meter**, and **Companion hearts**. Life drops when enemies hit you; Manna is
-the resource your spoken DNA draws on; the DNA meter tracks your language
-progress; companion hearts mirror your companion's loyalty.
+meter**, and **Companion hearts**. Life drops when enemies hit you. The DNA
+meter tracks your language progress; companion hearts mirror your companion's
+loyalty. **Manna is currently a static readout**: the gauge is drawn and
+labelled, but no gameplay mechanic drives it in this build (`Hud.UpdateManna`
+has no production caller), so it does not change during play.
 
 ## Core loop
 
@@ -47,17 +52,25 @@ progress; companion hearts mirror your companion's loyalty.
 ## Dialogue
 
 NPC dialogue is surfaced through the on-screen dialogue box
-(`DialogueSystem.Show(nodeId)`, C13). Dialogue content is keyed by node id;
-the set of nodes is defined by the NPC/companion content in the zones.
+(`DialogueSystem.Show(nodeId)`, C13). Dialogue content is keyed by node id,
+but in this build the content is a small hardcoded set of lines
+(`DialogueSystem.DialogueFor`); any node id outside that set falls back to a
+generic placeholder line. There is no per-NPC dialogue content yet.
 
-## Saving
+## Saving and loading
 
-The game autosaves to `user://savegame.json` (see [install.md](install.md) for
-the on-disk location). DNA counters, emotion, progression and zone are
-persisted (C14).
+There is **no autosave**. Saving is manual: press `F5` to save and `F9` to
+load. Both write/read `user://savegame.json` (see [install.md](install.md)
+for the on-disk location). A save persists your DNA counters, companion
+identity and loyalty, the DNA meter, progression and the current zone (C14).
+Loading restores those values and re-enters the saved zone with a fresh
+enemy ring — note that load does **not** reposition your player character
+(zone travel with `T` does); you load wherever you were standing. The saved
+emotion label is written but is not restored on load.
 
 ---
-Claim labels: controls, HUD, systems and save path are VERIFIED against the
-source files named above. The moment-to-moment feel (difficulty, pacing) is
-UNVERIFIED — no human has played the packaged Windows build yet (no wine on
-the build host; see [build-and-run.md](build-and-run.md)).
+Claim labels: controls, HUD, systems, save/load behaviour and save path are
+VERIFIED against the source files named above. The moment-to-moment feel
+(difficulty, pacing) is UNVERIFIED — no human has played the packaged Windows
+build yet (no wine on the build host; see
+[build-and-run.md](build-and-run.md)).
