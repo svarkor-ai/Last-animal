@@ -43,7 +43,7 @@ public partial class BridgeMvpProof : SceneTree
 {
     private const int MovePhysicsFrames = 30;  // WASD accumulation in PHYSICS ticks (0.5s @ 60Hz) before the move assert (headless uncapped frames are tiny; 12 gave dx=0.031 < 0.05, MC 1256.14)
     private const int AttackBudgetFrames = 60; // input-path kill budget before seam fallback
-    private const int FollowFrames = 120;      // frames the companion gets to close distance (headless uncapped frames are tiny; 40 gave moved<0.2, MC 1256.14)
+    private const int FollowFrames = 120;      // physics ticks from the teleport baseline for the companion to close (MC 1344.2)
     private const int HoldFrames = 1200;       // post-PASS hold: 1200 physics ticks @60Hz = 20s
                                                // > the helper's 15s capture window (MC 1344.2)
     private const int FrameBudget = 2400;      // hard overall budget (raised: MoveFrames 60 + FollowFrames 120 + attack budget need headroom, MC 1256.14)
@@ -73,6 +73,7 @@ public partial class BridgeMvpProof : SceneTree
     private int _physFrames;    // physics ticks elapsed since compose (movement is physics-driven)
     private int _pressPhysFrame; // physics tick at which move_right was pressed (MC 1344.1)
     private int _holdStartPhys;  // physics tick when the render-bar hold began (MC 1344.2)
+    private int _followStartPhys; // physics tick when the follow baseline was captured (MC 1344.2)
     // (loyalty, hearts) pairs recorded from every LoyaltyChanged event (MC 1344.1 marker-3).
     private readonly List<(int loy, int hearts)> _loyaltyPairs = new();
     private int _loyaltyPending; // loyalty of the emit currently in flight (MC 1344.1)
@@ -216,6 +217,14 @@ public partial class BridgeMvpProof : SceneTree
                     Input.ActionRelease("move_right");
                     GD.Print("BRIDGE_MVP_PROOF: MARKER 1/6 PLAYER_MOVED — simulated WASD -> PlayerController -> CharacterBody3D");
                     TeleportIntoRange();
+                    // MC 1345 mechanism (as RuntimeIntegrationProof): baseline at the
+                    // teleport — the companion is still at the player's pre-teleport
+                    // position, so dist0 reads "started away". The late stage-3
+                    // capture raced the companion's convergence under Xvfb (MC 1344.2).
+                    _companionStart = _companion.GlobalPosition;
+                    _followDist0 = _companion.GlobalPosition.DistanceTo(_player.GlobalPosition);
+                    _followStartPhys = _physFrames;
+                    GD.Print($"BRIDGE_MVP_PROOF: follow baseline captured dist0={_followDist0:0.###}");
                     _stage = 2;
                     _stageFrames = 0;
                 }
@@ -308,16 +317,17 @@ public partial class BridgeMvpProof : SceneTree
                     if (_failed) return true;
                     GD.Print("BRIDGE_MVP_PROOF: MARKER 4/6 BOOK_OPENED — EmpathyPanel.Open(BookEntry) surfaced the M04 entry + fired C2");
 
-                    // COMPANION_FOLLOWS baseline: companion -> player distance now.
-                    _companionStart = _companion.GlobalPosition;
-                    _followDist0 = _companion.GlobalPosition.DistanceTo(_player.GlobalPosition);
+                    // COMPANION_FOLLOWS: baseline was captured at the teleport
+                    // (MC 1344.2) — go straight to the follow window.
                     _stage = 4;
                     _stageFrames = 0;
                 }
                 break;
 
             case 4:
-                if (_stageFrames >= FollowFrames)
+                // Window gated on physics ticks from the teleport baseline (MC 1345
+                // mechanism): process frames diverge from engine time under Xvfb.
+                if (_physFrames >= _followStartPhys + FollowFrames)
                 {
                     float d1 = _companion.GlobalPosition.DistanceTo(_player.GlobalPosition);
                     float moved = _companionStart.DistanceTo(_companion.GlobalPosition);
