@@ -42,6 +42,22 @@ public class DnaLanguage
     private static readonly int[] InversionMap = { 3, 2, 1, 0 };
 
     /// <summary>
+    /// The ONE id-seeded signature builder: deterministic per entity id, 6
+    /// nucleotides in 0..3, Id carries the entity identity. Both readers of a
+    /// creature's DNA — the kill-extraction path (CombatSystem.OnKill) and the
+    /// interact/speak path (WorldDirector) — build signatures here, so the
+    /// seeding has exactly one implementation.
+    /// </summary>
+    public static LanguageSignature SignatureForEntity(int entityId)
+    {
+        var rng = new System.Random(entityId);
+        var nucleotides = new int[6];
+        for (int i = 0; i < nucleotides.Length; i++)
+            nucleotides[i] = rng.Next(4); // 0-3 (A,C,G,T)
+        return new LanguageSignature(nucleotides, entityId);
+    }
+
+    /// <summary>
     /// Extract the DNA language signature from an entity as a message.
     /// Returns null if the entity has no LanguageSignature component.
     /// </summary>

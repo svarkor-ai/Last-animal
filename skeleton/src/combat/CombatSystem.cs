@@ -67,15 +67,11 @@ public class CombatSystem
         if (defeatedEntity == null || !defeatedEntity.IsDead)
             return null;
 
-        // Wires M02 extract: build the defeated enemy's DNA signature from a
-        // deterministic seed derived from its entity id, then fire the event.
-        // The signature's Id carries the defeated enemy's identity so the
-        // DnaExtracted event names the source (C10/C2).
-        var rng = new System.Random(defeatedEntity.EntityId);
-        var nucleotides = new int[6];
-        for (int i = 0; i < nucleotides.Length; i++)
-            nucleotides[i] = rng.Next(4); // 0-3 (A,C,G,T)
-        var sig = new Dna.LanguageSignature(nucleotides, defeatedEntity.EntityId);
+        // Wires M02 extract: the defeated enemy's DNA signature comes from the
+        // ONE id-seeded builder (DnaLanguage.SignatureForEntity), then the
+        // event fires. The signature's Id carries the defeated enemy's
+        // identity so the DnaExtracted event names the source (C10/C2).
+        var sig = Dna.DnaLanguage.SignatureForEntity(defeatedEntity.EntityId);
         DnaExtracted?.Invoke(sig);
         return sig;
     }

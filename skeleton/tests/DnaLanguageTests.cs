@@ -313,4 +313,45 @@ public class DnaLanguageTests
         // Most common is 0 (tie broken by lower value), inversion is 3.
         Assert.Equal(3, profile.Counters[0]);
     }
+
+    // --- MC 1344: the ONE id-seeded signature builder -----------------------
+
+    [Fact]
+    public void SignatureForEntity_IsDeterministic_PerEntityId()
+    {
+        var a = DnaLanguage.SignatureForEntity(7);
+        var b = DnaLanguage.SignatureForEntity(7);
+        var c = DnaLanguage.SignatureForEntity(8);
+
+        Assert.Equal(a.Nucleotides, b.Nucleotides);
+        Assert.Equal(a.Id, b.Id);
+        Assert.NotEqual(a.Nucleotides, c.Nucleotides);
+        Assert.Equal(7, a.Id);
+        Assert.Equal(8, c.Id);
+    }
+
+    [Fact]
+    public void SignatureForEntity_SixNucleotides_InRange()
+    {
+        var sig = DnaLanguage.SignatureForEntity(2003);
+
+        Assert.Equal(6, sig.Nucleotides.Length);
+        foreach (int n in sig.Nucleotides)
+            Assert.InRange(n, 0, 3);
+    }
+
+    [Fact]
+    public void SignatureForEntity_MatchesTheOnKillSeeding()
+    {
+        // The kill-extraction path historically seeded System.Random(entityId)
+        // and drew 6 nucleotides; the shared builder must reproduce exactly
+        // that so extraction and speak agree on a creature's DNA.
+        var rng = new System.Random(2004);
+        var expected = new int[6];
+        for (int i = 0; i < expected.Length; i++) expected[i] = rng.Next(4);
+
+        var sig = DnaLanguage.SignatureForEntity(2004);
+
+        Assert.Equal(expected, sig.Nucleotides);
+    }
 }
