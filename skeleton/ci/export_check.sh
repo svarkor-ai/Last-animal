@@ -4,7 +4,9 @@
 # Proves: (1) export templates for 4.7.2.stable are installed for the calling user
 #         (2) headless Windows release export of the given preset PRODUCES a .exe
 #             whose first 2 bytes are 'MZ' (valid PE header).
-# CI contract for M13 (installer): same two checks at full-game scale.
+# CI contract for M13 (installer): same two checks at full-game scale — the
+# default preset/out_exe below IS the full-game export since M13 (MC 1344);
+# pass "Windows-preflight build/preflight.exe" explicitly for the M00 gate.
 #
 # Usage:
 #   GODOT=/path/to/godot ./ci/export_check.sh [preset_name] [project_dir] [out_exe]
@@ -13,7 +15,7 @@ set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 PRESET="${1:-Windows}"
 PROJ="${2:-$(dirname "$HERE")}"
-OUT_EXE="${3:-build/preflight.exe}"
+OUT_EXE="${3:-build/LastAnimal.exe}"
 : "${GODOT:?set GODOT to the engine binary (see engine/PIN.txt)}"
 
 fail() { echo "EXPORT_CHECK: FAIL: $*" >&2; exit 1; }
