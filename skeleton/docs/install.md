@@ -18,7 +18,8 @@ export preset).
 
 ## Saves
 
-Progress is saved to `user://savegame.json`, which on Windows resolves to:
+Saving is manual — press `F5` in game (there is no autosave; `F9` loads). The
+save is written to `user://savegame.json`, which on Windows resolves to:
 
 ```
 %APPDATA%\Godot\app_userdata\Last Animal\savegame.json
