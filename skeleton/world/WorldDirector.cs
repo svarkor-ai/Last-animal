@@ -154,7 +154,10 @@ public partial class WorldDirector : Node3D
         _saveLoad = new SaveLoadController(
             _spokenDna, _companionCore, _hud,
             currentZone: () => _zone,
-            enterZone: EnterZone);
+            enterZone: EnterZone,
+            // MC 1348 N1: health rides the snapshot so F9 rescues a dead player.
+            playerHealth: () => _player.Health,
+            restoreHealth: h => _player.RestoreHealth(h));
         SpawnEnemies();
         SpawnCompanion();
         EnterZone(_zone);

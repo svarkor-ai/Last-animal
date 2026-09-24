@@ -42,40 +42,44 @@ public sealed class SaveLoadController
     private readonly Func<string> _currentZone;
     private readonly Action<string> _enterZone;
 
-    // Progression: chapters cleared = first entries into distinct zones.
-    // Seeded with the default zone so the boot-time meadow entry is not
-    // counted as progress.
-    private int _progression;
-    private string _lastZone = EcosystemSpawner.DefaultZone;
+    // Progression: chapters cleared = first entries into DISTINCT zones
+    // (MC 1348 N2 — the counting rule lives in the pure ZoneProgression so it
+    // is headless-testable; this controller only delegates). Seeded with the
+    // default zone so the boot-time meadow entry is not counted as progress.
+    private readonly ZoneProgression _progression = new(EcosystemSpawner.DefaultZone);
+
+    // Player health seam (MC 1348 N1): read at save, restored on load, so the
+    // F9 load path rescues a dead player.
+    private readonly Func<int> _playerHealth;
+    private readonly Action<int> _restoreHealth;
 
     public SaveLoadController(
         List<LanguageSignature> spokenDna,
         CompanionComponent companion,
         Hud hud,
         Func<string> currentZone,
-        Action<string> enterZone)
+        Action<string> enterZone,
+        Func<int> playerHealth,
+        Action<int> restoreHealth)
     {
         _spokenDna = spokenDna;
         _companion = companion;
         _hud = hud;
         _currentZone = currentZone;
         _enterZone = enterZone;
+        _playerHealth = playerHealth;
+        _restoreHealth = restoreHealth;
     }
 
     /// <summary>Progression counter (chapters cleared / distinct zones entered).</summary>
-    public int Progression => _progression;
+    public int Progression => _progression.Chapters;
 
     /// <summary>
     /// Progression tick from the director's zone-entered handler: the FIRST
-    /// entry into each distinct zone clears a chapter; re-entering the same
-    /// zone (including a load's re-entry) does not.
+    /// entry into each distinct zone clears a chapter; re-entering a zone
+    /// already visited (including a load's re-entry) does not.
     /// </summary>
-    public void OnZoneEntered(string zoneId)
-    {
-        if (zoneId == _lastZone) return;
-        _lastZone = zoneId;
-        _progression++;
-    }
+    public void OnZoneEntered(string zoneId) => _progression.OnZoneEntered(zoneId);
 
     /// <summary>Snapshot the live game into user://savegame.json. False on I/O error.</summary>
     public bool Save()
@@ -83,13 +87,16 @@ public sealed class SaveLoadController
         var state = new GameState
         {
             ZoneId = _currentZone(),
-            Progression = _progression,
+            Progression = _progression.Chapters,
             // The per-position most-common nucleotide of the spoken history
             // (the C14 "persists DNA counters" snapshot).
             LearnedDnaCounters = BuildLearnedCounters(),
             DnaEventCount = _hud.DnaMeter,
             CompanionEntityId = _companion.CompanionEntityId,
             CompanionLoyalty = _companion.Loyalty,
+            // MC 1348 N1: health is part of the snapshot so a load can rescue
+            // a dead player.
+            PlayerHealth = _playerHealth(),
         };
         return SaveSystem.Save(state, new GodotSaveStore());
     }
@@ -107,11 +114,12 @@ public sealed class SaveLoadController
         _companion.CompanionEntityId = loaded.CompanionEntityId;
         _companion.Loyalty = loaded.CompanionLoyalty;
         _hud.UpdateDnaMeter(loaded.DnaEventCount);
-        _progression = loaded.Progression;
-        // Seed _lastZone with the saved zone so the re-entry below does not
-        // count as new progression, then re-enter: the director's handler
-        // re-applies the zone's SpawnSet.
-        _lastZone = loaded.ZoneId;
+        // MC 1348 N1: restore health (reviving a dead player) and mirror it
+        // on the HUD life gauge, which the bus does not drive.
+        _restoreHealth(loaded.PlayerHealth);
+        _hud.UpdateLife(loaded.PlayerHealth);
+        _progression.SeedForLoad(loaded.ZoneId, loaded.Progression);
+        // Re-enter: the director's handler re-applies the zone's SpawnSet.
         _enterZone(loaded.ZoneId);
         return true;
     }
