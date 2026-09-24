@@ -46,9 +46,14 @@ public partial class RuntimeIntegrationProof : SceneTree
     // frames, not engine time. Count physics ticks instead (BridgeMvpProof pattern).
     private int _physFrames;
     private int _pressPhysFrame;
+    private int _followStartPhys; // physics tick when the follow baseline was captured (MC 1345)
+    private int _holdStartPhys;   // physics tick when the render-bar hold began (MC 1344.1)
     private const int AttackBudgetFrames = 240;   // input-path kill budget
     private const int FollowFrames = 40;
-    private const int HoldFrames = 600;           // post-PASS hold for the render bar
+    private const int HoldFrames = 1200;          // post-PASS hold for the render bar:
+    // 1200 physics-capped frames @60fps = 20s > the helper's 15s capture window.
+    // 600 (10s) raced the capture — the proof quit before the framebuffer grab
+    // and the render bar read a blank screen (MC 1344.1, flaky in runtime32).
     private const int FrameBudget = 2400;
 
     private EventBus? _bus;
@@ -237,6 +242,18 @@ public partial class RuntimeIntegrationProof : SceneTree
                     Input.ActionRelease("move_right");
                     GD.Print("LA_GATE: PLAYER_EXISTS_MOVED — WASD -> body -> director-owned PlayerController (instance identity via GameBootstrap)");
                     TeleportIntoRange();
+                    // MC 1345 (option A): capture the follow baseline HERE, right
+                    // after the teleport — the companion is still at the player's
+                    // pre-teleport position, so dist0 honestly reads "started away"
+                    // and the close-in assert in stage 4 is exercised as written.
+                    // Capturing at stage 4 raced the companion's convergence during
+                    // the attack wait, and the check could fire on the capture frame
+                    // itself (_followStartPhys defaults 0), reading field defaults
+                    // (dist0=0) instead of a measurement.
+                    _companionStart = _companion.GlobalPosition;
+                    _followDist0 = _companion.GlobalPosition.DistanceTo(_playerBody.GlobalPosition);
+                    _followStartPhys = _physFrames;
+                    GD.Print($"LA_GATE: follow baseline captured dist0={_followDist0:0.###}");
                     _stage = 2;
                     _stageFrames = 0;
                 }
@@ -336,25 +353,27 @@ public partial class RuntimeIntegrationProof : SceneTree
                 break;
 
             case 4:
-                if (_stageFrames >= FollowFrames)
+                // Gate on PHYSICS ticks (MC 1344.1): the companion's lerp is
+                // delta-based, so its progress tracks ENGINE TIME. Process frames
+                // and physics ticks diverge under Xvfb (a process frame can span
+                // many ticks), so a window counted in process frames measures the
+                // wrong thing in both directions. 40 physics ticks = 0.67s of
+                // engine time regardless of frame rate. The baseline was captured
+                // at the teleport (stage 1, MC 1345) — see _followStartPhys.
+                if (_physFrames >= _followStartPhys + FollowFrames)
                 {
                     // COMPANION_FOLLOWS: the machine-wired CompanionEntity
                     // trails the player.
                     float d1 = _companion.GlobalPosition.DistanceTo(_playerBody.GlobalPosition);
-                    float moved = _companionStart.DistanceTo(_companion.GlobalPosition);
+                    float moved = _companion.GlobalPosition.DistanceTo(_companionStart);
                     if (moved < 0.2f || d1 > _followDist0 - 0.25f)
                     {
-                        Fail($"companion did not follow (moved={moved:0.###}, dist {_followDist0:0.###} -> {d1:0.###})");
+                        Fail($"companion did not follow (moved={moved:0.###}, dist {_followDist0:0.###} -> {d1:0.###}) playerNow={_playerBody.GlobalPosition} companionNow={_companion.GlobalPosition}");
                         return true;
                     }
                     GD.Print($"LA_GATE: COMPANION_FOLLOWS — CompanionEntity (machine-wired) closed on the player (dist {_followDist0:0.###} -> {d1:0.###})");
                     _stage = 5;
                     _stageFrames = 0;
-                }
-                else if (_stageFrames == 1)
-                {
-                    _companionStart = _companion.GlobalPosition;
-                    _followDist0 = _companion.GlobalPosition.DistanceTo(_playerBody.GlobalPosition);
                 }
                 break;
 
@@ -365,12 +384,13 @@ public partial class RuntimeIntegrationProof : SceneTree
                 _asserted = true;
                 _stage = 6;
                 _stageFrames = 0;
+                _holdStartPhys = _physFrames;
                 break;
 
             case 6:
                 // Hold the live scene so graphical-test-helper (--wait 15)
                 // captures a real rendered frame, not the splash.
-                if (_stageFrames >= HoldFrames) { Quit(0); return true; }
+                if (_physFrames >= _holdStartPhys + HoldFrames) { Quit(0); return true; }
                 break;
 
             // ---- save mode: round-trip through the REAL scene state ----
