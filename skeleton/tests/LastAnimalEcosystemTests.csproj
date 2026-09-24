@@ -31,6 +31,7 @@
   <ItemGroup>
     <!-- M12 ecosystem source (this card). -->
     <Compile Include="../src/ecosystem/EcosystemSpawner.cs" />
+    <Compile Include="../src/ecosystem/BossController.cs" />
     <!-- M02 DNA sources the spawner's CounterProfile adaptation reads. -->
     <Compile Include="../src/dna/DnaLanguage.cs" />
     <Compile Include="../src/dna/DnaMessage.cs" />
@@ -47,6 +48,7 @@
          with /p:IncludeHarness=false for the green run (two-sided
          calibration, same pattern as combat_test.sh). -->
     <Compile Include="EcosystemSpawnerTests.cs" />
+    <Compile Include="BossControllerTests.cs" />
     <Compile Include="EcosystemHarnessSelfTest.cs" Condition=" '$(IncludeHarness)' != 'false' " />
   </ItemGroup>
 
